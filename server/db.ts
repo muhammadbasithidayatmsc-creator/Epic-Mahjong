@@ -485,7 +485,17 @@ export const db = {
   // USERS / AUTH
   findUserByCredential(usernameOrEmail: string): (UserProfile & { password_hash: string }) | undefined {
     const query = usernameOrEmail.toLowerCase().trim();
-    return memoryDb.users.find(u => u.username.toLowerCase() === query || u.email.toLowerCase() === query);
+    const found = memoryDb.users.find(u => u.username.toLowerCase() === query || u.email.toLowerCase() === query);
+    if (found) return found;
+
+    // Check aliases
+    if (query === 'admin' || query === 'superadmin' || query === 'admin@epicmahjong.com') {
+      return memoryDb.users.find(u => u.role === 'SUPER_ADMIN');
+    }
+    if (query === 'owner' || query === 'owner@epicmahjong.com') {
+      return memoryDb.users.find(u => u.role === 'OWNER');
+    }
+    return undefined;
   },
 
   findUserById(id: string): UserProfile | undefined {

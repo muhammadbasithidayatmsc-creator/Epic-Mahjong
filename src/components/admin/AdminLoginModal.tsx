@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, User, X, Sparkles, KeyRound } from 'lucide-react';
+import { ShieldCheck, Lock, User, X, KeyRound, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/api';
 import { UserProfile } from '../../types';
 
@@ -16,22 +16,22 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onLoginSuccess,
   onErrorToast
 }) => {
-  const [usernameOrEmail, setUsernameOrEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [usernameOrEmail, setUsernameOrEmail] = useState('superadmin');
+  const [password, setPassword] = useState('epicadmin2026');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!usernameOrEmail.trim() || !password) {
+  const performLogin = async (userValue: string, passValue: string) => {
+    if (!userValue.trim() || !passValue) {
       onErrorToast('Username/Email dan Password wajib diisi.');
       return;
     }
 
     setLoading(true);
     try {
-      const data = await api.login(usernameOrEmail.trim(), password);
+      const data = await api.login(userValue.trim(), passValue);
       onLoginSuccess(data.user);
       onClose();
     } catch (err: any) {
@@ -41,14 +41,21 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     }
   };
 
-  // Quick fill helper for testing
-  const handleQuickFill = (role: 'admin' | 'owner') => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await performLogin(usernameOrEmail, password);
+  };
+
+  // Instant 1-Click login helper
+  const handleQuickLogin = async (role: 'admin' | 'owner') => {
     if (role === 'admin') {
       setUsernameOrEmail('superadmin');
       setPassword('epicadmin2026');
+      await performLogin('superadmin', 'epicadmin2026');
     } else {
       setUsernameOrEmail('owner');
       setPassword('epicowner2026');
+      await performLogin('owner', 'epicowner2026');
     }
   };
 
@@ -59,7 +66,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 p-1 rounded-lg"
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
           aria-label="Tutup login"
         >
           <X className="w-5 h-5" />
@@ -111,40 +118,69 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               </div>
               <input
                 id="login-password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
-                placeholder="••••••••"
+                placeholder="epicadmin2026"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#161f30] border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-slate-100 text-sm focus:outline-none focus:border-amber-500"
+                className="w-full bg-[#161f30] border border-slate-700 rounded-xl pl-10 pr-10 py-3 text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-mono"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
-          {/* Testing credentials helper */}
-          <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-2">
-            <div className="flex items-center justify-between text-slate-400 font-semibold text-[11px]">
-              <span className="flex items-center gap-1">
-                <KeyRound className="w-3 h-3 text-amber-400" />
-                Akun Awal Sistem (Klik untuk isi):
+          {/* Testing credentials helper with instant 1-click login */}
+          <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-2.5">
+            <div className="flex items-center justify-between text-slate-300 font-semibold text-[11px]">
+              <span className="flex items-center gap-1.5 text-amber-400">
+                <KeyRound className="w-3.5 h-3.5" />
+                Akses Langsung 1-Klik:
               </span>
+              <span className="text-[10px] text-slate-500">Pilih untuk login</span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickFill('admin')}
-                className="py-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[11px] font-semibold text-left transition-colors"
+                disabled={loading}
+                onClick={() => handleQuickLogin('admin')}
+                className="p-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-left transition-all group flex flex-col justify-between"
               >
-                Super Admin
-                <div className="text-[10px] text-slate-400 font-mono">superadmin</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-300 font-bold text-xs">Super Admin</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-amber-400 opacity-70 group-hover:translate-x-0.5 transition-transform" />
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono mt-1">
+                  User: <span className="text-slate-200 font-semibold">superadmin</span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  Pass: <span className="text-slate-300">epicadmin2026</span>
+                </div>
               </button>
+
               <button
                 type="button"
-                onClick={() => handleQuickFill('owner')}
-                className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-[11px] font-semibold text-left transition-colors"
+                disabled={loading}
+                onClick={() => handleQuickLogin('owner')}
+                className="p-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-750 border border-slate-700 text-left transition-all group flex flex-col justify-between"
               >
-                Owner
-                <div className="text-[10px] text-slate-400 font-mono">owner</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-200 font-bold text-xs">Owner Portal</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 opacity-70 group-hover:translate-x-0.5 transition-transform" />
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono mt-1">
+                  User: <span className="text-slate-200 font-semibold">owner</span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  Pass: <span className="text-slate-300">epicowner2026</span>
+                </div>
               </button>
             </div>
           </div>

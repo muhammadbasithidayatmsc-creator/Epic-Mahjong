@@ -7,7 +7,57 @@ interface TableShowcaseProps {
   onSelectForBooking: (tableId: string) => void;
 }
 
+const FALLBACK_SHOWCASE_TABLES: MahjongTable[] = [
+  {
+    id: 'tbl-01',
+    name: 'TABLE 01',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Generasi Terbaru, Kursi Ergonomis, Soundproofing Luas',
+    features: ['Automatic Shuffler', 'Premium Soundproofing', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: ''
+  },
+  {
+    id: 'tbl-02',
+    name: 'TABLE 02',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Halus, Suasana Santai, Akses Minuman & Snack Bar',
+    features: ['Automatic Shuffler', 'Snack Bar Access', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: ''
+  },
+  {
+    id: 'tbl-03',
+    name: 'TABLE 03',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Sentral, Pencahayaan Khusus Game, Area Nyaman',
+    features: ['Automatic Shuffler', 'Game Lighting', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: ''
+  },
+  {
+    id: 'tbl-04',
+    name: 'TABLE 04',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Sudut Tenang, Privasi Ekstra, Sirkulasi Udara Nyaman',
+    features: ['Automatic Shuffler', 'Private Corner', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: ''
+  },
+  {
+    id: 'tbl-05',
+    name: 'TABLE 05',
+    capacity: 6,
+    description: 'VIP Private Mahjong Room, Meja Otomatis Elektrik Eksekutif, Sofa Lounge & Meja Lebar',
+    features: ['VIP Private Suite', 'Automatic Shuffler', 'Sofa Lounge', 'Kapasitas 6 Pax'],
+    is_active: true,
+    created_at: ''
+  }
+];
+
 export const TableShowcase: React.FC<TableShowcaseProps> = ({ tables, onSelectForBooking }) => {
+  const displayTables = (tables && tables.length > 0) ? tables : FALLBACK_SHOWCASE_TABLES;
+
   return (
     <section id="tables-section" className="py-16 md:py-24 bg-[#0b0f17] border-b border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -37,7 +87,7 @@ export const TableShowcase: React.FC<TableShowcaseProps> = ({ tables, onSelectFo
 
         {/* 5 Tables Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tables.map((table, idx) => {
+          {displayTables.map((table, idx) => {
             return (
               <div
                 key={table.id}

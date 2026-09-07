@@ -68,9 +68,11 @@ function formatWhatsAppUrl(adminPhone: string, reservation: {
   notes?: string;
 }) {
   // Normalize phone number to digits only (e.g., 085181959275 -> 6285181959275)
-  let phone = adminPhone.replace(/[^0-9]/g, '');
+  let phone = (adminPhone || '085181959275').replace(/[^0-9]/g, '');
   if (phone.startsWith('0')) {
     phone = '62' + phone.slice(1);
+  } else if (!phone.startsWith('62')) {
+    phone = '62' + phone;
   }
 
   const message = 
@@ -106,7 +108,14 @@ Mohon informasi terkait harga dan proses pembayaran.
 
 Terima kasih.`;
 
-  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  const encoded = encodeURIComponent(message);
+  return {
+    url: `https://api.whatsapp.com/send?phone=${phone}&text=${encoded}`,
+    waMeUrl: `https://wa.me/${phone}?text=${encoded}`,
+    webUrl: `https://web.whatsapp.com/send?phone=${phone}&text=${encoded}`,
+    phone,
+    message
+  };
 }
 
 // ==========================================
@@ -133,32 +142,31 @@ app.get('/api/public/tables', (req, res) => {
   }
 });
 
-// 3. Get Table Availability for Selected Date & Time
+// 3. Get Table Availability for Selected Date & Time (with safe fallback)
 app.get('/api/public/availability', (req, res) => {
   try {
-    const { date, time } = req.query;
-    if (!date || !time) {
-      return res.status(400).json({ error: 'Parameter date dan time wajib diisi.' });
-    }
+    const today = new Date().toISOString().split('T')[0];
+    const date = String(req.query.date || today).trim() || today;
+    const time = String(req.query.time || '14:00').trim() || '14:00';
 
-    const tables = db.getTableAvailability(String(date), String(time));
+    const tables = db.getTableAvailability(date, time);
     res.json(tables);
   } catch (err: any) {
+    console.error('[API] getTableAvailability error:', err);
     res.status(500).json({ error: err.message || 'Gagal memeriksa ketersediaan meja.' });
   }
 });
 
-// 4. Get Table Schedule Matrix for a Given Date
+// 4. Get Table Schedule Matrix for a Given Date (with safe fallback)
 app.get('/api/public/schedule', (req, res) => {
   try {
-    const { date } = req.query;
-    if (!date) {
-      return res.status(400).json({ error: 'Parameter date wajib diisi.' });
-    }
+    const today = new Date().toISOString().split('T')[0];
+    const date = String(req.query.date || today).trim() || today;
 
-    const schedule = db.getScheduleForDate(String(date));
+    const schedule = db.getScheduleForDate(date);
     res.json(schedule);
   } catch (err: any) {
+    console.error('[API] getScheduleForDate error:', err);
     res.status(500).json({ error: err.message || 'Gagal memuat jadwal meja.' });
   }
 });
@@ -194,7 +202,8 @@ app.post('/api/public/reservations', (req, res) => {
     });
 
     const settings = db.getSettings();
-    const whatsappUrl = formatWhatsAppUrl(settings.admin_whatsapp, {
+    const adminPhone = settings.admin_whatsapp || '085181959275';
+    const waData = formatWhatsAppUrl(adminPhone, {
       booking_code: reservation.booking_code,
       customer_name: reservation.customer_name,
       customer_phone: reservation.customer_phone,
@@ -209,7 +218,11 @@ app.post('/api/public/reservations', (req, res) => {
       success: true,
       message: 'Booking berhasil dibuat. Silakan lanjutkan ke WhatsApp Admin untuk proses berikutnya.',
       reservation,
-      whatsappUrl
+      whatsappUrl: waData.url,
+      fallbackWhatsappUrl: waData.waMeUrl,
+      webWhatsappUrl: waData.webUrl,
+      formattedMessage: waData.message,
+      adminPhone: waData.phone
     });
   } catch (err: any) {
     // Check for double-booking conflict error

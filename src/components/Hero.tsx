@@ -1,12 +1,31 @@
 import React from 'react';
-import { Calendar, MapPin, Sparkles, ChevronRight, Clock, ShieldCheck } from 'lucide-react';
+import { Calendar, MapPin, Sparkles, ChevronRight, Clock, ShieldCheck, MessageCircle } from 'lucide-react';
+import { BusinessSettings } from '../types';
 
 interface HeroProps {
-  onBookingClick: () => void;
-  location: string;
+  settings?: BusinessSettings | null;
+  onBookingClick?: () => void;
+  location?: string;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onBookingClick, location }) => {
+export const Hero: React.FC<HeroProps> = ({ settings, onBookingClick, location: propLocation }) => {
+  const adminWhatsApp = settings?.admin_whatsapp || '085181959275';
+  const location = propLocation || settings?.location || 'Alam Sutera';
+  const cleanPhone = adminWhatsApp.replace(/[^0-9]/g, '') || '6285181959275';
+  const waTargetPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+  const waUrl = `https://api.whatsapp.com/send?phone=${waTargetPhone}&text=${encodeURIComponent('Halo Admin EPIC MAHJONG, saya ingin info ketersediaan & reservasi meja.')}`;
+
+  const handleBookingClick = () => {
+    if (onBookingClick) {
+      onBookingClick();
+    } else {
+      const el = document.getElementById('booking-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
   return (
     <section id="hero-section" className="relative overflow-hidden pt-8 pb-16 md:pt-14 md:pb-24 border-b border-slate-800/60">
       {/* Subtle background ambient glows */}
@@ -51,14 +70,13 @@ export const Hero: React.FC<HeroProps> = ({ onBookingClick, location }) => {
                 <div className="text-xs text-slate-400 font-medium">Lokasi</div>
                 <div className="text-sm font-bold text-amber-300 mt-0.5 flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
-                  Alam Sutera
+                  {location}
                 </div>
               </div>
               <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 col-span-2 sm:col-span-1">
-                <div className="text-xs text-slate-400 font-medium">Reservasi</div>
-                <div className="text-sm font-bold text-emerald-400 mt-0.5 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
-                  Cepat & Mudah
+                <div className="text-xs text-slate-400 font-medium">WhatsApp Admin</div>
+                <div className="text-sm font-bold text-emerald-400 mt-0.5 font-mono">
+                  {adminWhatsApp}
                 </div>
               </div>
             </div>
@@ -68,26 +86,30 @@ export const Hero: React.FC<HeroProps> = ({ onBookingClick, location }) => {
               <button
                 id="hero-cta-booking-btn"
                 type="button"
-                onClick={onBookingClick}
+                onClick={handleBookingClick}
                 className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-base tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all duration-200 cursor-pointer"
               >
                 <Calendar className="w-5 h-5 text-slate-950" />
-                <span>BOOKING NOW</span>
+                <span>BOOKING MEJA SEKARANG</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
 
               <a
-                href="#tables-section"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border border-slate-700 bg-slate-900/40 hover:bg-slate-850 text-slate-300 hover:text-white transition-all text-sm font-medium"
+                id="hero-whatsapp-btn"
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 font-bold transition-all text-sm"
               >
-                <span>Lihat 5 Meja</span>
+                <MessageCircle className="w-4 h-4 fill-emerald-400 text-emerald-950" />
+                <span>Chat Admin ({adminWhatsApp})</span>
               </a>
             </div>
 
             {/* Info guarantee */}
             <div className="flex items-center gap-2 text-xs text-slate-400 pt-1">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Tanpa registrasi akun • Konfirmasi instan via WhatsApp</span>
+              <span>Tanpa registrasi akun • Hubungi Admin {adminWhatsApp}</span>
             </div>
 
           </div>

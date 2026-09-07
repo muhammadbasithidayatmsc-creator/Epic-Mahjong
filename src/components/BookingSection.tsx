@@ -7,24 +7,82 @@ import {
   Phone, 
   FileText, 
   CheckCircle2, 
-  AlertCircle, 
   Sparkles, 
   ArrowRight, 
   MessageCircle,
   RefreshCw,
-  Info
+  Info,
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { TableWithAvailability, BusinessSettings, Reservation } from '../types';
+import { TableWithAvailability, BusinessSettings, Reservation, MahjongTable } from '../types';
 
 interface BookingSectionProps {
+  tables?: MahjongTable[];
   settings: BusinessSettings | null;
+  preselectedTableId?: string | null;
   onBookingSuccess: (reservation: Reservation, whatsappUrl: string) => void;
   onErrorToast: (message: string) => void;
 }
 
+const DEFAULT_FALLBACK_TABLES: TableWithAvailability[] = [
+  {
+    id: 'tbl-01',
+    name: 'TABLE 01',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Generasi Terbaru, Kursi Ergonomis, Soundproofing Premium',
+    features: ['Automatic Shuffler', 'Premium Soundproofing', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: '',
+    status: 'AVAILABLE'
+  },
+  {
+    id: 'tbl-02',
+    name: 'TABLE 02',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Halus, Suasana Santai, Akses Minuman & Snack Bar',
+    features: ['Automatic Shuffler', 'Snack Bar Access', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: '',
+    status: 'AVAILABLE'
+  },
+  {
+    id: 'tbl-03',
+    name: 'TABLE 03',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Sentral, Pencahayaan Khusus Game, Area Nyaman',
+    features: ['Automatic Shuffler', 'Game Lighting', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: '',
+    status: 'AVAILABLE'
+  },
+  {
+    id: 'tbl-04',
+    name: 'TABLE 04',
+    capacity: 4,
+    description: 'Meja Otomatis Elektrik Sudut Tenang, Privasi Ekstra, Sirkulasi Udara Nyaman',
+    features: ['Automatic Shuffler', 'Private Corner', 'Kapasitas 4 Pax'],
+    is_active: true,
+    created_at: '',
+    status: 'AVAILABLE'
+  },
+  {
+    id: 'tbl-05',
+    name: 'TABLE 05',
+    capacity: 6,
+    description: 'VIP Private Mahjong Room, Meja Otomatis Elektrik Eksekutif, Sofa Lounge & Meja Lebar',
+    features: ['VIP Private Suite', 'Automatic Shuffler', 'Sofa Lounge', 'Kapasitas 6 Pax'],
+    is_active: true,
+    created_at: '',
+    status: 'AVAILABLE'
+  }
+];
+
 export const BookingSection: React.FC<BookingSectionProps> = ({
+  tables: tablesProp,
   settings,
+  preselectedTableId,
   onBookingSuccess,
   onErrorToast
 }) => {
@@ -48,8 +106,17 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
   const [guestCount, setGuestCount] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
 
-  // Table availability state
-  const [tables, setTables] = useState<TableWithAvailability[]>([]);
+  // Table availability state - preloaded with fallback so it's NEVER blank
+  const [tables, setTables] = useState<TableWithAvailability[]>(() => {
+    if (tablesProp && tablesProp.length > 0) {
+      return tablesProp.map(t => ({
+        ...t,
+        status: 'AVAILABLE' as const
+      }));
+    }
+    return DEFAULT_FALLBACK_TABLES;
+  });
+
   const [loadingAvailability, setLoadingAvailability] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -60,25 +127,57 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', '00:00'
   ];
 
+  const adminWhatsApp = settings?.admin_whatsapp || '085181959275';
+
+  // Sync tables from tablesProp if updated
+  useEffect(() => {
+    if (tablesProp && tablesProp.length > 0) {
+      setTables(prev => {
+        // If prev already has availability statuses, preserve them while taking updated table definitions
+        return tablesProp.map(tp => {
+          const match = prev.find(p => p.id === tp.id);
+          return {
+            ...tp,
+            status: match?.status || 'AVAILABLE'
+          };
+        });
+      });
+    }
+  }, [tablesProp]);
+
+  // Handle preselected table ID from props (e.g. clicked in TableShowcase)
+  useEffect(() => {
+    if (preselectedTableId && tables.length > 0) {
+      const match = tables.find(t => t.id === preselectedTableId);
+      if (match) {
+        setSelectedTable(match);
+        setGuestCount(match.capacity || 4);
+      }
+    }
+  }, [preselectedTableId, tables]);
+
   // Fetch availability whenever selectedDate or selectedTime changes
   const fetchAvailability = async () => {
     if (!selectedDate || !selectedTime) return;
     setLoadingAvailability(true);
     try {
       const data = await api.getAvailability(selectedDate, selectedTime);
-      setTables(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setTables(data);
 
-      // If currently selected table is no longer AVAILABLE in the new slot, deselect it
-      if (selectedTable) {
-        const stillAvailable = data.find(t => t.id === selectedTable.id && t.status === 'AVAILABLE');
-        if (!stillAvailable) {
-          setSelectedTable(null);
-        } else {
-          setSelectedTable(stillAvailable);
+        // If currently selected table is still available, keep it, otherwise update
+        if (selectedTable) {
+          const stillAvailable = data.find(t => t.id === selectedTable.id && t.status === 'AVAILABLE');
+          if (!stillAvailable) {
+            setSelectedTable(null);
+          } else {
+            setSelectedTable(stillAvailable);
+          }
         }
       }
     } catch (err: any) {
-      onErrorToast(err.message || 'Gagal memuat ketersediaan meja.');
+      console.warn('[BookingSection] fetchAvailability notice:', err);
+      // Keep existing tables loaded so user always sees the 5 tables
     } finally {
       setLoadingAvailability(false);
     }
@@ -144,13 +243,18 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
 
       setShowReviewModal(false);
 
-      // Open WhatsApp deep link immediately in new tab/window
-      if (res.whatsappUrl) {
-        window.open(res.whatsappUrl, '_blank');
+      // Try opening WhatsApp in a safe manner
+      const targetWaUrl = res.whatsappUrl || res.fallbackWhatsappUrl;
+      if (targetWaUrl) {
+        try {
+          window.open(targetWaUrl, '_blank');
+        } catch (_) {
+          // ignore popup blocker error since modal will offer direct click
+        }
       }
 
-      // Trigger success celebration view with reservation data
-      onBookingSuccess(res.reservation, res.whatsappUrl);
+      // Trigger success modal with all data
+      onBookingSuccess(res.reservation, targetWaUrl || '');
 
       // Reset form fields
       setCustomerName('');
@@ -158,7 +262,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       setNotes('');
       setSelectedTable(null);
 
-      // Refresh availability
+      // Refresh availability in background
       fetchAvailability();
     } catch (err: any) {
       setShowReviewModal(false);
@@ -189,7 +293,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
           </h2>
           <p className="text-slate-400 text-sm sm:text-base mt-3 leading-relaxed">
             Pilih tanggal dan jam bermain, cek status ketersediaan 5 meja secara realtime, 
-            dan lanjutkan booking langsung ke WhatsApp Super Admin.
+            dan lanjutkan booking langsung ke WhatsApp Super Admin ({adminWhatsApp}).
           </p>
         </div>
 
@@ -210,15 +314,15 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             <div className="flex items-center gap-4 text-xs font-medium">
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-500/20" />
-                <span className="text-slate-300">AVAILABLE</span>
+                <span className="text-slate-300">AVAILABLE (Tersedia)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-500/20" />
-                <span className="text-slate-300">PENDING</span>
+                <span className="text-slate-300">PENDING (Proses)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-400 ring-2 ring-rose-500/20" />
-                <span className="text-slate-300">BOOKED</span>
+                <span className="text-slate-300">BOOKED (Penuh)</span>
               </div>
             </div>
           </div>
@@ -253,10 +357,10 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                 <button
                   type="button"
                   onClick={fetchAvailability}
-                  className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+                  className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
                 >
-                  <RefreshCw className={`w-3 h-3 ${loadingAvailability ? 'animate-spin' : ''}`} />
-                  <span>Cek Ulang Ketersediaan</span>
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingAvailability ? 'animate-spin' : ''}`} />
+                  <span>Segarkan Ketersediaan</span>
                 </button>
               </div>
 
@@ -270,7 +374,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                       onClick={() => setSelectedTime(time)}
                       className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20 font-bold'
                           : 'bg-[#161f30] border-slate-700 text-slate-200 hover:border-slate-600 hover:bg-[#1a253a]'
                       }`}
                     >
@@ -287,7 +391,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
           </div>
         </div>
 
-        {/* STEP 2: 5 Tables Realtime Status */}
+        {/* STEP 2: 5 Tables Realtime Status with Complete Description */}
         <div className="mb-12">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
             <div className="flex items-center gap-3">
@@ -295,7 +399,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                 2
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-100">Pilih 1 dari 5 Meja Tersedia</h3>
+                <h3 className="text-lg font-bold text-slate-100">Ketersediaan & Keterangan 5 Meja</h3>
                 <p className="text-xs text-slate-400">
                   Jadwal: <span className="text-amber-400 font-semibold">{selectedDate}</span> pukul <span className="text-amber-400 font-semibold">{selectedTime} WIB</span>
                 </p>
@@ -310,124 +414,166 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             )}
           </div>
 
-          {loadingAvailability ? (
-            <div className="py-16 text-center text-slate-400 space-y-3">
-              <RefreshCw className="w-8 h-8 mx-auto animate-spin text-amber-400" />
-              <p className="text-sm">Memeriksa ketersediaan 5 meja di server...</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {tables.map(table => {
-                const isSelected = selectedTable?.id === table.id;
-                const isAvailable = table.status === 'AVAILABLE';
-                const isPending = table.status === 'PENDING';
-                const isBooked = table.status === 'BOOKED';
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+            {tables.map(table => {
+              const isSelected = selectedTable?.id === table.id;
+              const isAvailable = table.status === 'AVAILABLE';
+              const isPending = table.status === 'PENDING';
+              const isBooked = table.status === 'BOOKED';
 
-                // Status Badge styling
-                let badgeClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
-                let statusLabel = 'AVAILABLE';
-                let statusIcon = '🟢';
+              // Status Badge styling
+              let badgeClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+              let statusLabel = 'AVAILABLE';
+              let statusDesc = 'Meja Kosong (Siap Dipesan)';
+              let statusIcon = '🟢';
 
-                if (isPending) {
-                  badgeClass = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
-                  statusLabel = 'PENDING';
-                  statusIcon = '🟡';
-                } else if (isBooked) {
-                  badgeClass = 'bg-rose-500/20 text-rose-300 border-rose-500/40';
-                  statusLabel = 'BOOKED';
-                  statusIcon = '🔴';
-                }
+              if (isPending) {
+                badgeClass = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+                statusLabel = 'PENDING';
+                statusDesc = 'Dalam Proses Booking';
+                statusIcon = '🟡';
+              } else if (isBooked) {
+                badgeClass = 'bg-rose-500/20 text-rose-300 border-rose-500/40';
+                statusLabel = 'BOOKED';
+                statusDesc = 'Sudah Terisi Penuh';
+                statusIcon = '🔴';
+              }
 
-                return (
-                  <div
-                    key={table.id}
-                    id={`table-card-${table.id}`}
-                    onClick={() => isAvailable && handleSelectTable(table)}
-                    className={`relative rounded-2xl p-5 border transition-all duration-200 flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-[#152033] border-amber-400 shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/50'
-                        : isAvailable
-                        ? 'bg-[#111724] border-slate-700/80 hover:border-amber-500/50 hover:bg-[#151c2b] cursor-pointer'
-                        : 'bg-[#0f141e]/60 border-slate-800/60 opacity-60 cursor-not-allowed'
-                    }`}
-                  >
-                    {/* Top row: Table name & status badge */}
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <div className="font-serif font-bold text-lg text-slate-100">
-                          {table.name}
-                        </div>
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-extrabold border ${badgeClass}`}>
-                          <span>{statusIcon}</span>
-                          <span>{statusLabel}</span>
-                        </span>
+              return (
+                <div
+                  key={table.id}
+                  id={`table-card-${table.id}`}
+                  onClick={() => isAvailable && handleSelectTable(table)}
+                  className={`relative rounded-2xl p-5 border transition-all duration-200 flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-[#152033] border-amber-400 shadow-xl shadow-amber-500/15 ring-2 ring-amber-400/50'
+                      : isAvailable
+                      ? 'bg-[#111724] border-slate-700/80 hover:border-amber-500/50 hover:bg-[#151c2b] cursor-pointer'
+                      : 'bg-[#0f141e]/70 border-slate-800/80 opacity-75'
+                  }`}
+                >
+                  <div>
+                    {/* Header: Name & Status */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="font-serif font-bold text-lg text-slate-100">
+                        {table.name}
                       </div>
-
-                      {/* Capacity */}
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
-                        <Users className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Kapasitas: {table.capacity} Orang</span>
-                      </div>
-
-                      {/* Description */}
-                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-4">
-                        {table.description || 'Meja Otomatis Elektrik Mahjong'}
-                      </p>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold border ${badgeClass}`}>
+                        <span>{statusIcon}</span>
+                        <span>{statusLabel}</span>
+                      </span>
                     </div>
 
-                    {/* Action button */}
-                    <div className="pt-2 border-t border-slate-800/80">
-                      {isAvailable ? (
-                        <button
-                          type="button"
-                          className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                            isSelected
-                              ? 'bg-amber-400 text-slate-950 shadow-md'
-                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'
-                          }`}
-                        >
-                          {isSelected ? '✓ Terpilih' : 'Pilih Meja Ini'}
-                        </button>
-                      ) : (
-                        <div className="text-center py-2 text-xs font-medium text-slate-500">
-                          {isBooked ? 'Sudah Terisi' : 'Menunggu Bayar'}
-                        </div>
-                      )}
+                    {/* Capacity */}
+                    <div className="flex items-center gap-1.5 text-xs text-amber-400/90 font-medium mb-3">
+                      <Users className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Kapasitas: {table.capacity} Orang</span>
                     </div>
+
+                    {/* Complete Description (Keterangan Meja) */}
+                    <div className="text-xs text-slate-300 leading-relaxed mb-4 min-h-[48px]">
+                      {table.description || 'Meja Otomatis Elektrik Mahjong modern generasi terbaru.'}
+                    </div>
+
+                    {/* Feature tags */}
+                    {table.features && table.features.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        {table.features.map((feature, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 rounded-md bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-400 font-medium"
+                          >
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  {/* Status explanation & Action button */}
+                  <div className="pt-3 border-t border-slate-800/80 space-y-2">
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <span>{statusDesc}</span>
+                    </div>
+
+                    {isAvailable ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectTable(table);
+                        }}
+                        className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-400 text-slate-950 shadow-md'
+                            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'
+                        }`}
+                      >
+                        {isSelected ? '✓ Meja Terpilih' : 'Pilih Meja Ini'}
+                      </button>
+                    ) : (
+                      <div className="w-full py-2 px-3 rounded-lg text-xs text-center font-medium bg-slate-800/50 text-slate-500 border border-slate-800">
+                        {isBooked ? 'Sesi Terisi Penuh' : 'Menunggu Konfirmasi'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* STEP 3: Customer Form (Shown once a table is selected, or informs to select) */}
+        {/* STEP 3: Customer Form & Selected Table Details */}
         <div id="customer-form-container" className="bg-[#111724] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
           <div className="flex items-center gap-3 pb-5 border-b border-slate-800 mb-6">
             <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center font-bold text-amber-400 text-sm">
               3
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-100">Data Pemesan</h3>
+              <h3 className="text-lg font-bold text-slate-100">Data Pemesan & Rincian Reservasi</h3>
               <p className="text-xs text-slate-400">
                 {selectedTable 
-                  ? `Mengisi formulir untuk ${selectedTable.name} (${selectedDate} - ${selectedTime} WIB)`
-                  : 'Silakan pilih meja dengan status AVAILABLE pada langkah di atas terlebih dahulu'
+                  ? `Mengisi data untuk ${selectedTable.name} (${selectedDate} • ${selectedTime} WIB)`
+                  : 'Silakan pilih salah satu meja AVAILABLE di atas untuk melengkapi formulir'
                 }
               </p>
             </div>
           </div>
 
           {!selectedTable ? (
-            <div className="py-8 text-center bg-[#0d121c] border border-dashed border-slate-800 rounded-xl px-4">
-              <Info className="w-8 h-8 text-amber-400 mx-auto mb-2 opacity-80" />
-              <p className="text-sm text-slate-300 font-medium">Belum ada meja yang dipilih</p>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Silakan klik salah satu kartu meja yang berstatus <span className="text-emerald-400 font-bold">AVAILABLE</span> di atas untuk melanjutkan pengisian data.
+            <div className="py-10 text-center bg-[#0d121c] border border-dashed border-slate-800 rounded-xl px-4">
+              <Info className="w-9 h-9 text-amber-400 mx-auto mb-2 opacity-80" />
+              <p className="text-sm text-slate-200 font-semibold">Belum Ada Meja yang Dipilih</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                Silakan klik tombol <span className="text-emerald-400 font-bold">"Pilih Meja Ini"</span> pada salah satu dari 5 kartu meja di Langkah 2 di atas untuk melanjutkan pemesanan.
               </p>
             </div>
           ) : (
             <form onSubmit={handleOpenReview} className="space-y-6">
+              
+              {/* Highlight Keterangan Meja Terpilih */}
+              <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-serif font-bold text-base text-amber-400">{selectedTable.name}</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">
+                      AVAILABLE
+                    </span>
+                  </div>
+                  <div className="text-slate-300">
+                    Jadwal: <strong className="text-slate-100">{selectedDate}</strong> pukul <strong className="text-slate-100">{selectedTime} WIB</strong> (Sesi 2 Jam)
+                  </div>
+                </div>
+
+                <p className="text-slate-300 text-xs leading-relaxed">
+                  <strong className="text-slate-200">Keterangan:</strong> {selectedTable.description}
+                </p>
+
+                <div className="text-[11px] text-amber-400/90 pt-1">
+                  💡 Informasi harga sewa & konfirmasi pembayaran akan dipandu langsung oleh Super Admin via WhatsApp ({adminWhatsApp}).
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 
                 {/* Nama Customer */}
@@ -451,10 +597,10 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   </div>
                 </div>
 
-                {/* Nomor WhatsApp */}
+                {/* Nomor WhatsApp Customer */}
                 <div className="space-y-1.5">
                   <label htmlFor="customer_phone" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                    Nomor WhatsApp <span className="text-rose-400">*</span>
+                    Nomor WhatsApp Anda <span className="text-rose-400">*</span>
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -471,7 +617,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                     />
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Admin akan menghubungi nomor ini untuk konfirmasi harga & pembayaran.
+                    Pastikan nomor WhatsApp aktif untuk menerima konfirmasi dari Super Admin.
                   </p>
                 </div>
 
@@ -492,11 +638,11 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   </div>
                 </div>
 
-                {/* Read-Only: Meja & Jumlah Orang */}
+                {/* Meja & Jumlah Orang */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      Meja
+                      Meja Terpilih
                     </label>
                     <div className="bg-[#161f30]/60 border border-slate-800 rounded-xl px-4 py-3 text-amber-300 font-bold text-sm">
                       {selectedTable.name}
@@ -533,7 +679,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                     <textarea
                       id="notes"
                       rows={2}
-                      placeholder="Contoh: Perlu set ubin tambahan, request minuman, atau estimasi datang lebih awal..."
+                      placeholder="Contoh: Request minuman tambahan, set ubin mahjong khusus, atau datang lebih awal..."
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       className="w-full bg-[#161f30] border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
@@ -545,7 +691,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
               {/* Submit Button to open Summary */}
               <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-800">
                 <div className="text-xs text-slate-400">
-                  Status booking awal adalah <span className="text-amber-400 font-bold">PENDING</span> sebelum disepakati di WhatsApp.
+                  Tujuan pesan WhatsApp: <strong className="text-emerald-400 font-mono">085181959275</strong> (Super Admin)
                 </div>
 
                 <button
@@ -579,11 +725,11 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
               </span>
             </div>
 
-            {/* Modal Body - Exact fields requested */}
+            {/* Modal Body */}
             <div className="p-6 space-y-4 text-sm">
               <div className="p-4 rounded-xl bg-[#0b0f17] border border-slate-800 space-y-2.5 font-mono text-xs sm:text-sm">
                 <div className="text-amber-400 font-serif font-bold text-center border-b border-slate-800/80 pb-2 text-base">
-                  EPIC MAHJONG
+                  EPIC MAHJONG ALAM SUTERA
                 </div>
                 
                 <div className="flex justify-between py-1 border-b border-slate-800/40">
@@ -617,7 +763,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                 </div>
 
                 <div className="flex justify-between py-1 border-b border-slate-800/40">
-                  <span className="text-slate-400">Jumlah Orang:</span>
+                  <span className="text-slate-400">Kapasitas:</span>
                   <span className="text-slate-200 font-medium">{guestCount} Orang</span>
                 </div>
 
@@ -633,9 +779,9 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
               </div>
 
               {/* Instructions */}
-              <div className="text-xs text-slate-400 leading-relaxed bg-amber-500/5 p-3 rounded-lg border border-amber-500/20">
-                Setelah menekan tombol di bawah, reservasi akan tersimpan ke sistem dan Anda akan diarahkan ke WhatsApp Admin 
-                <span className="text-amber-300 font-semibold"> ({settings?.admin_whatsapp || '085181959275'})</span> untuk informasi harga dan pembayaran.
+              <div className="text-xs text-slate-300 leading-relaxed bg-emerald-950/20 p-3 rounded-lg border border-emerald-500/30">
+                Tujuan WhatsApp Super Admin: <strong className="text-emerald-300 font-mono">085181959275</strong>. 
+                Setelah menekan tombol di bawah, Anda akan langsung terhubung ke WhatsApp Admin untuk informasi tarif dan pembayaran.
               </div>
             </div>
 
@@ -645,7 +791,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                 type="button"
                 disabled={submitting}
                 onClick={() => setShowReviewModal(false)}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer"
               >
                 Ubah Data
               </button>
@@ -658,7 +804,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs tracking-wider shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
               >
                 <MessageCircle className="w-4 h-4 fill-slate-950" />
-                <span>{submitting ? 'Menyimpan...' : 'BOOKING VIA WHATSAPP'}</span>
+                <span>{submitting ? 'Menyimpan...' : 'BOOKING VIA WHATSAPP (085181959275)'}</span>
               </button>
             </div>
 

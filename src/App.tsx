@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MessageCircle } from 'lucide-react';
 import { api } from './lib/api';
 import { MahjongTable, BusinessSettings, UserProfile, Reservation } from './types';
 import { Navbar } from './components/Navbar';
@@ -207,6 +208,20 @@ export default function App() {
           }
         }}
       />
+
+      {/* Floating WhatsApp Quick Contact Button (Super Admin: 085181959275) */}
+      <a
+        id="floating-whatsapp-btn"
+        href={`https://api.whatsapp.com/send?phone=6285181959275&text=${encodeURIComponent('Halo Admin EPIC MAHJONG, saya ingin reservasi meja.')}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-2xl shadow-emerald-500/40 border-2 border-emerald-300 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+        title="Chat WhatsApp Super Admin: 085181959275"
+      >
+        <MessageCircle className="w-5 h-5 fill-slate-950" />
+        <span className="hidden sm:inline">WhatsApp Admin (085181959275)</span>
+        <span className="sm:hidden font-mono">085181959275</span>
+      </a>
 
     </div>
   );

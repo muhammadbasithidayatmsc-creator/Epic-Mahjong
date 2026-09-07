@@ -3,6 +3,19 @@ import { Calendar, RefreshCw, Clock } from 'lucide-react';
 import { api } from '../lib/api';
 import { ScheduleSlot } from '../types';
 
+const DEFAULT_INITIAL_SLOTS: ScheduleSlot[] = [
+  '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', '00:00'
+].map(time => ({
+  time,
+  tables: [
+    { table_id: 'tbl-01', table_name: 'TABLE 01', status: 'AVAILABLE' },
+    { table_id: 'tbl-02', table_name: 'TABLE 02', status: 'AVAILABLE' },
+    { table_id: 'tbl-03', table_name: 'TABLE 03', status: 'AVAILABLE' },
+    { table_id: 'tbl-04', table_name: 'TABLE 04', status: 'AVAILABLE' },
+    { table_id: 'tbl-05', table_name: 'TABLE 05', status: 'AVAILABLE' }
+  ]
+}));
+
 export const ScheduleView: React.FC = () => {
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -13,7 +26,7 @@ export const ScheduleView: React.FC = () => {
   }, []);
 
   const [date, setDate] = useState<string>(todayStr);
-  const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleSlot[]>(DEFAULT_INITIAL_SLOTS);
   const [loading, setLoading] = useState<boolean>(false);
 
   const loadSchedule = async () => {
@@ -21,7 +34,9 @@ export const ScheduleView: React.FC = () => {
     setLoading(true);
     try {
       const data = await api.getSchedule(date);
-      setSchedule(data);
+      if (data && data.length > 0) {
+        setSchedule(data);
+      }
     } catch (err) {
       console.error('Failed to load schedule:', err);
     } finally {

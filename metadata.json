@@ -1,0 +1,6 @@
+{
+  "name": "EPIC MAHJONG - Table Reservation",
+  "description": "Sistem reservasi meja eksklusif untuk EPIC MAHJONG Alam Sutera dengan ketersediaan realtime, anti double-booking, dan integrasi WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

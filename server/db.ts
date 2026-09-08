@@ -405,6 +405,9 @@ export const db = {
 
   getReservations(filters?: {
     date?: string;
+    startDate?: string;
+    endDate?: string;
+    tableId?: string;
     status?: string;
     search?: string;
   }): Reservation[] {
@@ -413,6 +416,15 @@ export const db = {
     if (filters) {
       if (filters.date) {
         result = result.filter(r => r.reservation_date === filters.date);
+      }
+      if (filters.startDate) {
+        result = result.filter(r => r.reservation_date >= filters.startDate!);
+      }
+      if (filters.endDate) {
+        result = result.filter(r => r.reservation_date <= filters.endDate!);
+      }
+      if (filters.tableId && filters.tableId !== 'ALL') {
+        result = result.filter(r => r.table_id === filters.tableId);
       }
       if (filters.status && filters.status !== 'ALL') {
         result = result.filter(r => r.status === filters.status);

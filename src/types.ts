@@ -27,6 +27,7 @@ export interface Reservation {
   guest_count: number;
   notes: string;
   status: ReservationStatus;
+  nominal?: number;
   created_at: string;
   updated_at: string;
 }

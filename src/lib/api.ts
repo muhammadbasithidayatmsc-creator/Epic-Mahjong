@@ -645,10 +645,20 @@ export const api = {
     };
   },
 
-  async getReservations(filters?: { date?: string; status?: string; search?: string }): Promise<Reservation[]> {
+  async getReservations(filters?: {
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    tableId?: string;
+    status?: string;
+    search?: string;
+  }): Promise<Reservation[]> {
     const params = new URLSearchParams();
     if (filters?.date) params.append('date', filters.date);
-    if (filters?.status) params.append('status', filters.status);
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.tableId && filters.tableId !== 'ALL') params.append('tableId', filters.tableId);
+    if (filters?.status && filters.status !== 'ALL') params.append('status', filters.status);
     if (filters?.search) params.append('search', filters.search);
 
     const res = await safeFetch(`/api/admin/reservations?${params.toString()}`, {
@@ -663,7 +673,16 @@ export const api = {
     if (filters?.date) {
       list = list.filter(r => r.reservation_date === filters.date);
     }
-    if (filters?.status) {
+    if (filters?.startDate) {
+      list = list.filter(r => r.reservation_date >= filters.startDate!);
+    }
+    if (filters?.endDate) {
+      list = list.filter(r => r.reservation_date <= filters.endDate!);
+    }
+    if (filters?.tableId && filters.tableId !== 'ALL') {
+      list = list.filter(r => r.table_id === filters.tableId);
+    }
+    if (filters?.status && filters.status !== 'ALL') {
       list = list.filter(r => r.status === filters.status);
     }
     if (filters?.search) {
@@ -671,7 +690,8 @@ export const api = {
       list = list.filter(
         r => r.customer_name.toLowerCase().includes(s) ||
              r.customer_phone.includes(s) ||
-             r.booking_code.toLowerCase().includes(s)
+             r.booking_code.toLowerCase().includes(s) ||
+             (r.table_name && r.table_name.toLowerCase().includes(s))
       );
     }
     return list;

@@ -330,9 +330,12 @@ app.get('/api/admin/stats', authenticateToken, (req, res) => {
 // List All Reservations with Filters
 app.get('/api/admin/reservations', authenticateToken, (req, res) => {
   try {
-    const { date, status, search } = req.query;
+    const { date, startDate, endDate, tableId, status, search } = req.query;
     const reservations = db.getReservations({
       date: date ? String(date) : undefined,
+      startDate: startDate ? String(startDate) : undefined,
+      endDate: endDate ? String(endDate) : undefined,
+      tableId: tableId ? String(tableId) : undefined,
       status: status ? String(status) : undefined,
       search: search ? String(search) : undefined
     });

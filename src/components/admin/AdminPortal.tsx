@@ -12,7 +12,9 @@ import {
   Menu, 
   X,
   Sparkles,
-  KeyRound
+  KeyRound,
+  BarChart3,
+  UserCheck
 } from 'lucide-react';
 import { UserProfile, MahjongTable, BusinessSettings } from '../../types';
 import { AdminDashboard } from './AdminDashboard';
@@ -22,6 +24,8 @@ import { AdminTables } from './AdminTables';
 import { AdminUsers } from './AdminUsers';
 import { AdminSettings } from './AdminSettings';
 import { AdminAccountSettings } from './AdminAccountSettings';
+import { AdminReports } from './AdminReports';
+import { AdminCustomers } from './AdminCustomers';
 
 interface AdminPortalProps {
   user: UserProfile;
@@ -35,7 +39,7 @@ interface AdminPortalProps {
   onSettingsUpdated?: (settings: BusinessSettings) => void;
 }
 
-type AdminTab = 'dashboard' | 'reservations' | 'schedule' | 'tables' | 'users' | 'settings' | 'account';
+type AdminTab = 'dashboard' | 'reservations' | 'schedule' | 'reports' | 'customers' | 'tables' | 'users' | 'settings' | 'account';
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   user,
@@ -64,9 +68,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'reservations' as AdminTab, label: 'Reservasi', icon: CalendarDays },
     { id: 'schedule' as AdminTab, label: 'Jadwal Meja', icon: Clock },
+    { id: 'reports' as AdminTab, label: '📊 REPORT', icon: BarChart3 },
+    { id: 'customers' as AdminTab, label: '👥 DATABASE CUSTOMER', icon: Users },
     ...(isSuperAdmin ? [
       { id: 'tables' as AdminTab, label: 'Kelola Meja', icon: TableProperties },
-      { id: 'users' as AdminTab, label: 'MANAJEMEN USER', icon: Users },
+      { id: 'users' as AdminTab, label: 'Kelola Akun Staff', icon: Shield },
       { id: 'settings' as AdminTab, label: 'Pengaturan Bisnis', icon: Settings }
     ] : []),
     { id: 'account' as AdminTab, label: 'Pengaturan Akun', icon: KeyRound }
@@ -245,6 +251,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
           {activeTab === 'schedule' && (
             <AdminSchedule onErrorToast={onErrorToast} />
+          )}
+
+          {activeTab === 'reports' && (
+            <AdminReports
+              user={user}
+              tables={tables}
+              settings={settings}
+              onErrorToast={onErrorToast}
+              onSuccessToast={onSuccessToast}
+            />
+          )}
+
+          {activeTab === 'customers' && (
+            <AdminCustomers
+              user={user}
+              settings={settings}
+              onErrorToast={onErrorToast}
+            />
           )}
 
           {activeTab === 'tables' && isSuperAdmin && (

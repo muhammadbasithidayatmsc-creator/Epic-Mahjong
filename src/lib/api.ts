@@ -143,6 +143,68 @@ Terima kasih.`;
 }
 
 // Local Storage helpers for client-side persistence (Vercel static support)
+export interface LocalAuthUser {
+  id: string;
+  username: string;
+  email: string;
+  role: 'SUPER_ADMIN' | 'OWNER';
+  full_name: string;
+  is_active: boolean;
+  password: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+const LOCAL_AUTH_USERS_KEY = 'epic_mahjong_auth_users_v2';
+const LOCAL_CURRENT_USER_KEY = 'epic_mahjong_current_user_v2';
+
+const INITIAL_AUTH_USERS: LocalAuthUser[] = [
+  {
+    id: 'usr-admin-01',
+    username: 'superadmin',
+    email: 'admin@epicmahjong.com',
+    role: 'SUPER_ADMIN',
+    full_name: 'Super Admin Epic Mahjong',
+    is_active: true,
+    password: 'epicadmin2026',
+    created_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'usr-owner-01',
+    username: 'owner',
+    email: 'owner@epicmahjong.com',
+    role: 'OWNER',
+    full_name: 'Owner Epic Mahjong',
+    is_active: true,
+    password: 'epicowner2026',
+    created_at: '2026-01-01T00:00:00.000Z'
+  }
+];
+
+function getLocalAuthUsers(): LocalAuthUser[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_AUTH_USERS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  try {
+    localStorage.setItem(LOCAL_AUTH_USERS_KEY, JSON.stringify(INITIAL_AUTH_USERS));
+  } catch (_) {}
+  return INITIAL_AUTH_USERS;
+}
+
+function saveLocalAuthUsers(users: LocalAuthUser[]) {
+  try {
+    localStorage.setItem(LOCAL_AUTH_USERS_KEY, JSON.stringify(users));
+  } catch (err) {
+    console.warn('[LocalStorage] save users failed:', err);
+  }
+}
+
 function getLocalReservations(): Reservation[] {
   try {
     const raw = localStorage.getItem(LOCAL_RES_KEY);
@@ -411,18 +473,67 @@ export const api = {
       throw new Error('Username/Email dan Password wajib diisi.');
     }
 
+    // 1. Try real server API first
     const res = await safeFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ usernameOrEmail: cleanU, password: cleanP })
     });
 
-    if (res.ok && res.isJson && res.data?.token && res.data?.user) {
-      this.setToken(res.data.token);
-      return res.data;
+    if (res.isJson) {
+      if (res.ok && res.data?.token && res.data?.user) {
+        this.setToken(res.data.token);
+        try {
+          localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(res.data.user));
+        } catch (_) {}
+        return res.data;
+      }
+      // If server returned a specific JSON error (status 400 or 401 with message)
+      if (res.data?.error) {
+        throw new Error(res.data.error);
+      }
     }
 
-    throw new Error(res.data?.error || 'Username atau password salah. Silakan periksa kembali kredensial Anda.');
+    // 2. Static host fallback (e.g. Vercel SPA where /api/* is rewritten to /index.html)
+    const users = getLocalAuthUsers();
+    const lowerInput = cleanU.toLowerCase();
+    const matched = users.find(
+      u => u.username.toLowerCase() === lowerInput || u.email.toLowerCase() === lowerInput
+    );
+
+    if (!matched) {
+      throw new Error('Username atau password salah.');
+    }
+
+    if (matched.is_active === false) {
+      throw new Error('Akun Anda telah dinonaktifkan oleh Administrator. Silakan hubungi Super Admin.');
+    }
+
+    if (matched.password !== cleanP) {
+      throw new Error('Username atau password salah.');
+    }
+
+    const token = `static_jwt_${matched.role.toLowerCase()}_${Date.now()}`;
+    const userProfile: UserProfile = {
+      id: matched.id,
+      username: matched.username,
+      email: matched.email,
+      role: matched.role,
+      full_name: matched.full_name,
+      is_active: matched.is_active,
+      created_at: matched.created_at
+    };
+
+    this.setToken(token);
+    try {
+      localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(userProfile));
+    } catch (_) {}
+
+    return {
+      success: true,
+      token,
+      user: userProfile
+    };
   },
 
   async getMe(): Promise<{ user: UserProfile }> {
@@ -432,11 +543,20 @@ export const api = {
     if (res.ok && res.isJson && res.data?.user) {
       return res.data;
     }
+    // Fallback on static hosting
+    const raw = localStorage.getItem(LOCAL_CURRENT_USER_KEY);
+    if (raw) {
+      try {
+        const u = JSON.parse(raw);
+        if (u && u.id && u.role) return { user: u };
+      } catch (_) {}
+    }
     throw new Error('Unauthorized');
   },
 
   logout() {
     this.removeToken();
+    localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
     localStorage.removeItem('epic_mahjong_demo_user');
   },
 
@@ -447,21 +567,52 @@ export const api = {
       const data = await this.getMe();
       return data.user;
     } catch {
+      const raw = localStorage.getItem(LOCAL_CURRENT_USER_KEY);
+      if (raw) {
+        try {
+          const u = JSON.parse(raw);
+          if (u && u.id && u.role) return u;
+        } catch (_) {}
+      }
       this.removeToken();
       return null;
     }
   },
 
   async changePassword(oldPassword: string, newPassword: string, confirmPassword?: string): Promise<{ success: boolean; message: string }> {
+    if (!oldPassword || !newPassword) {
+      throw new Error('Password lama dan password baru wajib diisi.');
+    }
+    if (newPassword.length < 8) {
+      throw new Error('Password baru minimal 8 karakter.');
+    }
+    if (confirmPassword && newPassword !== confirmPassword) {
+      throw new Error('Password baru dan konfirmasi password tidak sama.');
+    }
+
     const res = await safeFetch('/api/auth/change-password', {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ oldPassword, newPassword, confirmPassword })
     });
-    if (res.ok && res.isJson && res.data?.message) {
-      return res.data;
+    if (res.isJson) {
+      if (res.ok && res.data?.message) return res.data;
+      if (res.data?.error) throw new Error(res.data.error);
     }
-    throw new Error(res.data?.error || 'Gagal memperbarui password.');
+
+    // Static fallback
+    const current = await this.getCurrentUser();
+    if (!current) throw new Error('Unauthorized');
+    const users = getLocalAuthUsers();
+    const target = users.find(u => u.id === current.id);
+    if (!target) throw new Error('Pengguna tidak ditemukan.');
+    if (target.password !== oldPassword) {
+      throw new Error('Password lama tidak cocok.');
+    }
+    target.password = newPassword;
+    target.updated_at = new Date().toISOString();
+    saveLocalAuthUsers(users);
+    return { success: true, message: 'Password berhasil diperbarui.' };
   },
 
   // ADMIN APIS
@@ -667,24 +818,16 @@ export const api = {
     if (res.ok && res.isJson && Array.isArray(res.data)) {
       return res.data;
     }
-    return [
-      {
-        id: 'usr-admin',
-        username: 'admin',
-        email: 'admin@epicmahjong.com',
-        role: 'SUPER_ADMIN',
-        full_name: 'Super Admin Epic Mahjong',
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'usr-owner',
-        username: 'owner',
-        email: 'owner@epicmahjong.com',
-        role: 'OWNER',
-        full_name: 'Epic Mahjong Owner',
-        created_at: new Date().toISOString()
-      }
-    ];
+    return getLocalAuthUsers().map(u => ({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      full_name: u.full_name,
+      is_active: u.is_active,
+      created_at: u.created_at,
+      updated_at: u.updated_at
+    }));
   },
 
   async createOwner(payload: { username: string; email: string; password: string; full_name: string }): Promise<{ success: boolean; user: UserProfile }> {
@@ -694,15 +837,29 @@ export const api = {
       body: JSON.stringify(payload)
     });
     if (res.ok && res.isJson && res.data?.user) return res.data;
+    const users = getLocalAuthUsers();
+    const newUser: LocalAuthUser = {
+      id: `usr-owner-${Date.now()}`,
+      username: payload.username.trim(),
+      email: payload.email.trim(),
+      role: 'OWNER',
+      full_name: payload.full_name.trim(),
+      is_active: true,
+      password: payload.password,
+      created_at: new Date().toISOString()
+    };
+    users.push(newUser);
+    saveLocalAuthUsers(users);
     return {
       success: true,
       user: {
-        id: `user-${Date.now()}`,
-        username: payload.username,
-        email: payload.email,
-        role: 'OWNER',
-        full_name: payload.full_name,
-        created_at: new Date().toISOString()
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        role: newUser.role,
+        full_name: newUser.full_name,
+        is_active: newUser.is_active,
+        created_at: newUser.created_at
       }
     };
   },
@@ -718,7 +875,28 @@ export const api = {
       body: JSON.stringify(payload)
     });
     if (res.ok && res.isJson && res.data?.user) return res.data;
-    throw new Error(res.data?.error || 'Gagal memperbarui data pengguna.');
+    const users = getLocalAuthUsers();
+    const target = users.find(u => u.id === id);
+    if (!target) throw new Error('Pengguna tidak ditemukan.');
+    if (payload.username) target.username = payload.username.trim();
+    if (payload.email) target.email = payload.email.trim();
+    if (payload.full_name) target.full_name = payload.full_name.trim();
+    if (payload.is_active !== undefined) target.is_active = payload.is_active;
+    target.updated_at = new Date().toISOString();
+    saveLocalAuthUsers(users);
+    return {
+      success: true,
+      user: {
+        id: target.id,
+        username: target.username,
+        email: target.email,
+        role: target.role,
+        full_name: target.full_name,
+        is_active: target.is_active,
+        created_at: target.created_at
+      },
+      message: 'Data pengguna berhasil diperbarui.'
+    };
   },
 
   async resetOwnerPassword(id: string, newPassword: string): Promise<{ success: boolean; message: string }> {
@@ -728,7 +906,13 @@ export const api = {
       body: JSON.stringify({ newPassword })
     });
     if (res.ok && res.isJson && res.data?.message) return res.data;
-    throw new Error(res.data?.error || 'Gagal mereset password.');
+    const users = getLocalAuthUsers();
+    const target = users.find(u => u.id === id);
+    if (!target) throw new Error('Pengguna tidak ditemukan.');
+    target.password = newPassword;
+    target.updated_at = new Date().toISOString();
+    saveLocalAuthUsers(users);
+    return { success: true, message: 'Password Owner berhasil direset.' };
   },
 
   async toggleOwnerStatus(id: string, is_active: boolean): Promise<{ success: boolean; user: UserProfile; message: string }> {
@@ -738,7 +922,25 @@ export const api = {
       body: JSON.stringify({ is_active })
     });
     if (res.ok && res.isJson && res.data?.user) return res.data;
-    throw new Error(res.data?.error || 'Gagal mengubah status pengguna.');
+    const users = getLocalAuthUsers();
+    const target = users.find(u => u.id === id);
+    if (!target) throw new Error('Pengguna tidak ditemukan.');
+    target.is_active = is_active;
+    target.updated_at = new Date().toISOString();
+    saveLocalAuthUsers(users);
+    return {
+      success: true,
+      user: {
+        id: target.id,
+        username: target.username,
+        email: target.email,
+        role: target.role,
+        full_name: target.full_name,
+        is_active: target.is_active,
+        created_at: target.created_at
+      },
+      message: is_active ? 'Akun Owner berhasil diaktifkan.' : 'Akun Owner berhasil dinonaktifkan.'
+    };
   },
 
   async deleteUser(id: string): Promise<{ success: boolean }> {
@@ -746,6 +948,10 @@ export const api = {
       method: 'DELETE',
       headers: this.getAuthHeaders()
     });
+    if (res.ok) return { success: true };
+    const users = getLocalAuthUsers();
+    const filtered = users.filter(u => u.id !== id);
+    saveLocalAuthUsers(filtered);
     return { success: true };
   },
 

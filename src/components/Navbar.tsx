@@ -89,23 +89,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>WhatsApp Admin</span>
             </a>
 
-            {activeUser ? (
+            {activeUser && (
               <button
                 id="nav-admin-dashboard-btn"
                 onClick={handleDashboard}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 transition-all text-xs shadow-md shadow-amber-500/10"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 transition-all text-xs shadow-md shadow-amber-500/10 cursor-pointer"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Dashboard ({activeUser.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Owner'})</span>
-              </button>
-            ) : (
-              <button
-                id="nav-admin-login-btn"
-                onClick={onOpenAdminLogin}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-700 bg-slate-800/40 text-slate-300 hover:text-white hover:border-slate-600 transition-all text-xs font-medium"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-                <span>Portal Admin</span>
               </button>
             )}
           </div>
@@ -176,7 +167,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>WhatsApp Admin (085181959275)</span>
             </a>
 
-            {activeUser ? (
+            {activeUser && (
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -186,17 +177,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>Masuk Dashboard ({activeUser.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Owner'})</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenAdminLogin();
-                }}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-slate-700 text-slate-300 text-xs font-medium"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Portal Login Admin / Owner</span>
               </button>
             )}
           </div>

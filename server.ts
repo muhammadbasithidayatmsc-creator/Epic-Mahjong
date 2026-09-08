@@ -245,33 +245,20 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     const cleanInput = String(usernameOrEmail).toLowerCase().trim();
-    let user = db.findUserByCredential(cleanInput);
-
-    // Support 'admin' as alias for 'superadmin'
-    if (!user && (cleanInput === 'admin' || cleanInput === 'admin@epicmahjong.com' || cleanInput.includes('superadmin') || cleanInput.includes('admin'))) {
-      user = db.findUserByCredential('superadmin') || db.findUserByCredential('admin');
-    }
-    // Support 'owner'
-    if (!user && (cleanInput === 'owner' || cleanInput === 'owner@epicmahjong.com' || cleanInput.includes('owner'))) {
-      user = db.findUserByCredential('owner');
-    }
+    const user = db.findUserByCredential(cleanInput);
 
     if (!user) {
-      return res.status(401).json({ error: 'Kredensial tidak valid. Silakan periksa kembali username/email Anda.' });
+      return res.status(401).json({ error: 'Username atau password salah.' });
     }
 
-    // Verify password with bcrypt or convenience master passwords
-    let isMatch = bcrypt.compareSync(password, user.password_hash);
-    if (!isMatch) {
-      if (user.role === 'SUPER_ADMIN' && ['epicadmin2026', 'admin123', 'admin', 'superadmin'].includes(password)) {
-        isMatch = true;
-      } else if (user.role === 'OWNER' && ['epicowner2026', 'owner123', 'owner'].includes(password)) {
-        isMatch = true;
-      }
+    if (user.is_active === false) {
+      return res.status(403).json({ error: 'Akun Anda telah dinonaktifkan oleh Administrator. Silakan hubungi Super Admin.' });
     }
 
+    // Strictly verify password using secure bcrypt hash comparison
+    const isMatch = bcrypt.compareSync(String(password), user.password_hash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Password salah. Gunakan password yang sesuai.' });
+      return res.status(401).json({ error: 'Username atau password salah.' });
     }
 
     const payload = {
@@ -279,10 +266,11 @@ app.post('/api/auth/login', (req, res) => {
       username: user.username,
       email: user.email,
       role: user.role,
-      full_name: user.full_name
+      full_name: user.full_name,
+      is_active: user.is_active ?? true
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
 
     res.json({
       success: true,
@@ -295,17 +283,27 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.get('/api/auth/me', authenticateToken, (req: AuthenticatedRequest, res) => {
-  res.json({ user: req.user });
+  const user = db.findUserById(req.user!.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+  }
+  if (user.is_active === false) {
+    return res.status(403).json({ error: 'Akun Anda dinonaktifkan.' });
+  }
+  res.json({ user });
 });
 
 app.post('/api/auth/change-password', authenticateToken, (req: AuthenticatedRequest, res) => {
   try {
-    const { oldPassword, newPassword } = req.body;
+    const { oldPassword, newPassword, confirmPassword } = req.body;
     if (!oldPassword || !newPassword) {
       return res.status(400).json({ error: 'Password lama dan password baru wajib diisi.' });
     }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password baru minimal 6 karakter.' });
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password baru minimal 8 karakter.' });
+    }
+    if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'Password baru dan konfirmasi password tidak sama.' });
     }
 
     db.changePassword(req.user!.id, oldPassword, newPassword);
@@ -518,11 +516,54 @@ app.post('/api/admin/users', authenticateToken, requireRole(['SUPER_ADMIN']), (r
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ error: 'Semua field wajib diisi.' });
     }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password minimal 8 karakter.' });
+    }
 
     const newUser = db.createOwnerAccount({ username, email, password, full_name });
     res.status(201).json({ success: true, user: newUser });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Gagal membuat akun Owner.' });
+  }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireRole(['SUPER_ADMIN']), (req, res) => {
+  try {
+    const { username, email, full_name, is_active } = req.body;
+    const updated = db.updateOwnerAccount(req.params.id, { username, email, full_name, is_active });
+    res.json({ success: true, message: 'Data Owner berhasil diperbarui.', user: updated });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal memperbarui data Owner.' });
+  }
+});
+
+app.post('/api/admin/users/:id/reset-password', authenticateToken, requireRole(['SUPER_ADMIN']), (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password baru minimal 8 karakter.' });
+    }
+    db.resetOwnerPassword(req.params.id, newPassword);
+    res.json({ success: true, message: 'Password Owner berhasil direset.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal mereset password Owner.' });
+  }
+});
+
+app.patch('/api/admin/users/:id/status', authenticateToken, requireRole(['SUPER_ADMIN']), (req, res) => {
+  try {
+    const { is_active } = req.body;
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({ error: 'Status is_active harus berupa boolean.' });
+    }
+    const updated = db.toggleUserStatus(req.params.id, is_active);
+    res.json({ 
+      success: true, 
+      message: `Akun Owner berhasil ${is_active ? 'diaktifkan' : 'dinonaktifkan'}.`,
+      user: updated 
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal mengubah status akun Owner.' });
   }
 });
 

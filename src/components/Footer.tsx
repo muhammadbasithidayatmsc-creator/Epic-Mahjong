@@ -59,24 +59,17 @@ export const Footer: React.FC<FooterProps> = ({ settings, onOpenAdminLogin }) =>
             </ul>
           </div>
 
-          {/* Contact & Admin Portal */}
+          {/* Contact */}
           <div className="space-y-2">
             <div className="text-slate-200 font-semibold uppercase tracking-wider text-[11px]">Kontak Resmi</div>
             <p className="text-xs text-slate-400">
-              WhatsApp Super Admin:
+              WhatsApp Layanan Booking:
               <br />
               <strong className="text-emerald-400 font-mono">{adminWhatsApp}</strong>
             </p>
-            <div className="pt-3">
-              <button
-                id="footer-admin-login-link"
-                onClick={onOpenAdminLogin}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 transition-all text-xs"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>Portal Login Admin / Owner</span>
-              </button>
-            </div>
+            <p className="text-[11px] text-slate-500 pt-1">
+              Buka setiap hari: 10:00 - 02:00 WIB
+            </p>
           </div>
 
         </div>
@@ -85,8 +78,17 @@ export const Footer: React.FC<FooterProps> = ({ settings, onOpenAdminLogin }) =>
           <div>
             © {currentYear} {businessName}. All rights reserved. Lokasi: {location}.
           </div>
-          <div className="text-slate-500">
-            Design & Architecture for Epic Mahjong Table Game Club
+          <div className="flex items-center gap-4">
+            <span className="text-slate-600">Exclusive Mahjong Venue</span>
+            <button
+              id="footer-staff-access-link"
+              onClick={onOpenAdminLogin}
+              className="text-slate-700 hover:text-slate-400 transition-colors p-1"
+              title="Portal Login Internal Staff"
+              aria-label="Staff Portal"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 opacity-60 hover:opacity-100" />
+            </button>
           </div>
         </div>
       </div>

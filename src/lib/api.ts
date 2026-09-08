@@ -404,10 +404,13 @@ export const api = {
     token: string;
     user: UserProfile;
   }> {
-    const cleanU = String(usernameOrEmail || '').toLowerCase().trim();
+    const cleanU = String(usernameOrEmail || '').trim();
     const cleanP = String(password || '').trim();
 
-    // 1. Attempt backend login first
+    if (!cleanU || !cleanP) {
+      throw new Error('Username/Email dan Password wajib diisi.');
+    }
+
     const res = await safeFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -416,55 +419,7 @@ export const api = {
 
     if (res.ok && res.isJson && res.data?.token && res.data?.user) {
       this.setToken(res.data.token);
-      localStorage.setItem('epic_mahjong_demo_user', JSON.stringify(res.data.user));
       return res.data;
-    }
-
-    // 2. Client fallback for static deployments (e.g. Vercel static or offline server)
-    const isAdmin =
-      cleanU === 'superadmin' ||
-      cleanU === 'admin' ||
-      cleanU === 'admin@epicmahjong.com' ||
-      cleanU.includes('admin');
-
-    const isOwner =
-      cleanU === 'owner' ||
-      cleanU === 'owner@epicmahjong.com' ||
-      cleanU.includes('owner');
-
-    if (isAdmin) {
-      // Allow epicadmin2026, admin123, admin, superadmin, or standard entry
-      if (['epicadmin2026', 'admin123', 'admin', 'superadmin'].includes(cleanP) || cleanP.length >= 4) {
-        const dummyToken = 'jwt-superadmin-' + Date.now();
-        const dummyUser: UserProfile = {
-          id: 'usr-admin-01',
-          username: 'superadmin',
-          email: 'admin@epicmahjong.com',
-          role: 'SUPER_ADMIN',
-          full_name: 'Super Admin Epic Mahjong',
-          created_at: new Date().toISOString()
-        };
-        this.setToken(dummyToken);
-        localStorage.setItem('epic_mahjong_demo_user', JSON.stringify(dummyUser));
-        return { success: true, token: dummyToken, user: dummyUser };
-      }
-    }
-
-    if (isOwner) {
-      if (['epicowner2026', 'owner123', 'owner'].includes(cleanP) || cleanP.length >= 4) {
-        const dummyToken = 'jwt-owner-' + Date.now();
-        const dummyUser: UserProfile = {
-          id: 'usr-owner-01',
-          username: 'owner',
-          email: 'owner@epicmahjong.com',
-          role: 'OWNER',
-          full_name: 'Owner Epic Mahjong',
-          created_at: new Date().toISOString()
-        };
-        this.setToken(dummyToken);
-        localStorage.setItem('epic_mahjong_demo_user', JSON.stringify(dummyUser));
-        return { success: true, token: dummyToken, user: dummyUser };
-      }
     }
 
     throw new Error(res.data?.error || 'Username atau password salah. Silakan periksa kembali kredensial Anda.');
@@ -476,10 +431,6 @@ export const api = {
     });
     if (res.ok && res.isJson && res.data?.user) {
       return res.data;
-    }
-    const demoUserRaw = localStorage.getItem('epic_mahjong_demo_user');
-    if (demoUserRaw) {
-      return { user: JSON.parse(demoUserRaw) };
     }
     throw new Error('Unauthorized');
   },
@@ -499,6 +450,18 @@ export const api = {
       this.removeToken();
       return null;
     }
+  },
+
+  async changePassword(oldPassword: string, newPassword: string, confirmPassword?: string): Promise<{ success: boolean; message: string }> {
+    const res = await safeFetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ oldPassword, newPassword, confirmPassword })
+    });
+    if (res.ok && res.isJson && res.data?.message) {
+      return res.data;
+    }
+    throw new Error(res.data?.error || 'Gagal memperbarui password.');
   },
 
   // ADMIN APIS
@@ -746,6 +709,36 @@ export const api = {
 
   async createOwnerUser(payload: { username: string; email: string; password: string; full_name: string }): Promise<{ success: boolean; user: UserProfile }> {
     return this.createOwner(payload);
+  },
+
+  async updateOwnerUser(id: string, payload: { username?: string; email?: string; full_name?: string; is_active?: boolean }): Promise<{ success: boolean; user: UserProfile; message: string }> {
+    const res = await safeFetch(`/api/admin/users/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    if (res.ok && res.isJson && res.data?.user) return res.data;
+    throw new Error(res.data?.error || 'Gagal memperbarui data pengguna.');
+  },
+
+  async resetOwnerPassword(id: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const res = await safeFetch(`/api/admin/users/${id}/reset-password`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ newPassword })
+    });
+    if (res.ok && res.isJson && res.data?.message) return res.data;
+    throw new Error(res.data?.error || 'Gagal mereset password.');
+  },
+
+  async toggleOwnerStatus(id: string, is_active: boolean): Promise<{ success: boolean; user: UserProfile; message: string }> {
+    const res = await safeFetch(`/api/admin/users/${id}/status`, {
+      method: 'PATCH',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ is_active })
+    });
+    if (res.ok && res.isJson && res.data?.user) return res.data;
+    throw new Error(res.data?.error || 'Gagal mengubah status pengguna.');
   },
 
   async deleteUser(id: string): Promise<{ success: boolean }> {

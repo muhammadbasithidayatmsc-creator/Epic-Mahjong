@@ -113,6 +113,7 @@ function getInitialUsers(): (UserProfile & { password_hash: string })[] {
       password_hash: adminHash,
       role: 'SUPER_ADMIN',
       full_name: 'Super Admin Epic Mahjong',
+      is_active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     },
@@ -123,6 +124,7 @@ function getInitialUsers(): (UserProfile & { password_hash: string })[] {
       password_hash: ownerHash,
       role: 'OWNER',
       full_name: 'Owner Epic Mahjong',
+      is_active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -506,7 +508,10 @@ export const db = {
   },
 
   getUsers(): UserProfile[] {
-    return memoryDb.users.map(({ password_hash, ...safeUser }) => safeUser);
+    return memoryDb.users.map(({ password_hash, ...safeUser }) => ({
+      ...safeUser,
+      is_active: safeUser.is_active ?? true
+    }));
   },
 
   createOwnerAccount(data: {
@@ -515,9 +520,15 @@ export const db = {
     password: string;
     full_name: string;
   }): UserProfile {
+    if (!data.password || data.password.length < 8) {
+      throw new Error('Password minimal 8 karakter.');
+    }
+
+    const cleanUsername = data.username.toLowerCase().trim();
+    const cleanEmail = data.email.toLowerCase().trim();
+
     const existing = memoryDb.users.find(
-      u => u.username.toLowerCase() === data.username.toLowerCase().trim() ||
-           u.email.toLowerCase() === data.email.toLowerCase().trim()
+      u => u.username.toLowerCase() === cleanUsername || u.email.toLowerCase() === cleanEmail
     );
     if (existing) {
       throw new Error('Username atau Email sudah terdaftar.');
@@ -528,11 +539,12 @@ export const db = {
 
     const newUser: UserProfile & { password_hash: string } = {
       id: `usr-owner-${Date.now().toString().slice(-4)}`,
-      username: data.username.toLowerCase().trim(),
-      email: data.email.toLowerCase().trim(),
+      username: cleanUsername,
+      email: cleanEmail,
       password_hash,
       role: 'OWNER',
       full_name: data.full_name.trim(),
+      is_active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -540,6 +552,80 @@ export const db = {
     memoryDb.users.push(newUser);
     saveDatabase(memoryDb);
     const { password_hash: _, ...safeUser } = newUser;
+    return safeUser;
+  },
+
+  updateOwnerAccount(id: string, data: {
+    username?: string;
+    email?: string;
+    full_name?: string;
+    is_active?: boolean;
+  }): UserProfile {
+    const user = memoryDb.users.find(u => u.id === id);
+    if (!user) throw new Error('Pengguna tidak ditemukan.');
+    if (user.role === 'SUPER_ADMIN') {
+      throw new Error('Akun Super Admin tidak dapat diubah dari menu ini.');
+    }
+
+    if (data.username && data.username.trim()) {
+      const cleanU = data.username.toLowerCase().trim();
+      const duplicate = memoryDb.users.find(u => u.id !== id && u.username.toLowerCase() === cleanU);
+      if (duplicate) throw new Error('Username sudah digunakan oleh akun lain.');
+      user.username = cleanU;
+    }
+
+    if (data.email && data.email.trim()) {
+      const cleanE = data.email.toLowerCase().trim();
+      const duplicate = memoryDb.users.find(u => u.id !== id && u.email.toLowerCase() === cleanE);
+      if (duplicate) throw new Error('Email sudah digunakan oleh akun lain.');
+      user.email = cleanE;
+    }
+
+    if (data.full_name && data.full_name.trim()) {
+      user.full_name = data.full_name.trim();
+    }
+
+    if (data.is_active !== undefined) {
+      user.is_active = data.is_active;
+    }
+
+    user.updated_at = new Date().toISOString();
+    saveDatabase(memoryDb);
+
+    const { password_hash: _, ...safeUser } = user;
+    return safeUser;
+  },
+
+  resetOwnerPassword(id: string, newPass: string): boolean {
+    const user = memoryDb.users.find(u => u.id === id);
+    if (!user) throw new Error('Pengguna tidak ditemukan.');
+    if (user.role === 'SUPER_ADMIN') {
+      throw new Error('Password Super Admin tidak dapat direset dari menu ini.');
+    }
+
+    if (!newPass || newPass.length < 8) {
+      throw new Error('Password baru minimal 8 karakter.');
+    }
+
+    const salt = bcrypt.genSaltSync(10);
+    user.password_hash = bcrypt.hashSync(newPass, salt);
+    user.updated_at = new Date().toISOString();
+    saveDatabase(memoryDb);
+    return true;
+  },
+
+  toggleUserStatus(id: string, is_active: boolean): UserProfile {
+    const user = memoryDb.users.find(u => u.id === id);
+    if (!user) throw new Error('Pengguna tidak ditemukan.');
+    if (user.role === 'SUPER_ADMIN') {
+      throw new Error('Status akun Super Admin tidak dapat dinonaktifkan.');
+    }
+
+    user.is_active = is_active;
+    user.updated_at = new Date().toISOString();
+    saveDatabase(memoryDb);
+
+    const { password_hash: _, ...safeUser } = user;
     return safeUser;
   },
 
@@ -557,6 +643,10 @@ export const db = {
   changePassword(userId: string, oldPass: string, newPass: string): boolean {
     const user = memoryDb.users.find(u => u.id === userId);
     if (!user) throw new Error('Pengguna tidak ditemukan.');
+
+    if (!newPass || newPass.length < 8) {
+      throw new Error('Password baru minimal 8 karakter.');
+    }
 
     const isValid = bcrypt.compareSync(oldPass, user.password_hash);
     if (!isValid) throw new Error('Password lama tidak cocok.');

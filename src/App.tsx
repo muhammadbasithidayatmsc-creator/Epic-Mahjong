@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { api } from './lib/api';
 import { MahjongTable, BusinessSettings, UserProfile, Reservation } from './types';
@@ -11,18 +11,25 @@ import { HowToBook } from './components/HowToBook';
 import { VenueInfo } from './components/VenueInfo';
 import { Footer } from './components/Footer';
 import { BookingSuccessModal } from './components/BookingSuccessModal';
-import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { AdminPortal } from './components/admin/AdminPortal';
+import { InternalPortalLoginPage } from './components/admin/InternalPortalLoginPage';
+import { UnauthorizedPage } from './components/admin/UnauthorizedPage';
 import { Toast } from './components/Toast';
 
 export default function App() {
   const [tables, setTables] = useState<MahjongTable[]>([]);
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [viewMode, setViewMode] = useState<'customer' | 'admin'>('customer');
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
   
-  // Modals
-  const [loginModalOpen, setLoginModalOpen] = useState<boolean>(false);
+  // URL path routing state
+  const [currentPath, setCurrentPath] = useState<string>(() => {
+    const p = window.location.pathname.toLowerCase();
+    const h = window.location.hash.toLowerCase().replace('#', '');
+    return h.startsWith('/') ? h : p;
+  });
+
+  // Modals & temporary state
   const [successBookingData, setSuccessBookingData] = useState<{
     reservation: Reservation;
     whatsappUrl: string;
@@ -41,8 +48,41 @@ export default function App() {
     setToast({ message, type });
   };
 
-  // Load initial public data and user session
+  // Safe navigation helper that keeps history and syncs path state
+  const navigate = useCallback((path: string, replace = false) => {
+    try {
+      if (replace) {
+        window.history.replaceState(null, '', path);
+      } else {
+        window.history.pushState(null, '', path);
+      }
+    } catch {
+      window.location.hash = path;
+    }
+    setCurrentPath(path.toLowerCase());
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  // Listen to browser navigation (back/forward buttons)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const p = window.location.pathname.toLowerCase();
+      const h = window.location.hash.toLowerCase().replace('#', '');
+      const path = h.startsWith('/') ? h : p;
+      setCurrentPath(path);
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  // Load initial data and verify active session
   const loadInitialData = async () => {
+    setAuthChecking(true);
     try {
       const [fetchedTables, fetchedSettings] = await Promise.all([
         api.getTables(),
@@ -54,15 +94,20 @@ export default function App() {
       console.error('Failed to load initial data:', err);
     }
 
-    // Check if staff is already logged in
+    // Check if staff session is valid
     try {
       const user = await api.getCurrentUser();
-      if (user) {
+      if (user && user.is_active !== false) {
         setCurrentUser(user);
+      } else {
+        api.logout();
+        setCurrentUser(null);
       }
-    } catch (err) {
-      // Not logged in or expired token
+    } catch {
+      api.logout();
       setCurrentUser(null);
+    } finally {
+      setAuthChecking(false);
     }
   };
 
@@ -77,15 +122,17 @@ export default function App() {
 
   const handleLoginSuccess = (user: UserProfile) => {
     setCurrentUser(user);
-    setViewMode('admin');
+    navigate('/portal/dashboard', true);
     showToast(`Selamat datang kembali, ${user.full_name}!`, 'success');
   };
 
+  // Secure Logout: destroy token, clear state, and overwrite history state
   const handleLogout = () => {
     api.logout();
     setCurrentUser(null);
-    setViewMode('customer');
-    showToast('Anda telah logout dari portal staff.', 'info');
+    // Replace current history entry with login page so pressing "Back" cannot access dashboard
+    navigate('/portal/login', true);
+    showToast('Anda telah logout dari portal internal.', 'info');
   };
 
   const handleTablesUpdated = async () => {
@@ -97,20 +144,26 @@ export default function App() {
     }
   };
 
-  // If in admin mode and user is logged in, show the Admin Portal
-  if (viewMode === 'admin' && currentUser) {
+  // Path categorization
+  const isInternalLoginRoute = currentPath === '/portal/login' || currentPath === '/admin/login';
+  const isProtectedAdminRoute = (
+    currentPath.startsWith('/portal') || 
+    currentPath.startsWith('/admin') || 
+    currentPath === '/dashboard' ||
+    currentPath === '/settings'
+  ) && !isInternalLoginRoute;
+
+  // ROUTE 1: Dedicated Internal Portal Login (/portal/login or /admin/login)
+  if (isInternalLoginRoute) {
+    if (currentUser) {
+      // If already logged in, redirect to admin dashboard
+      navigate('/portal/dashboard', true);
+    }
     return (
       <>
-        <AdminPortal
-          user={currentUser}
-          tables={tables}
-          settings={settings}
-          onLogout={handleLogout}
-          onExitPortal={() => setViewMode('customer')}
-          onSuccessToast={(msg) => showToast(msg, 'success')}
-          onErrorToast={(msg) => showToast(msg, 'error')}
-          onTablesUpdated={handleTablesUpdated}
-          onSettingsUpdated={(newSettings) => setSettings(newSettings)}
+        <InternalPortalLoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onBackToHome={() => navigate('/')}
         />
         {toast && (
           <Toast
@@ -123,6 +176,62 @@ export default function App() {
     );
   }
 
+  // ROUTE 2: Protected Admin Route (/portal, /admin, /dashboard, etc.)
+  if (isProtectedAdminRoute) {
+    // If auth is still checking, show subtle dark loader
+    if (authChecking) {
+      return (
+        <div className="min-h-screen bg-[#090d16] flex items-center justify-center text-amber-400">
+          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+
+    // If authenticated, render AdminPortal with RBAC
+    if (currentUser) {
+      return (
+        <>
+          <AdminPortal
+            user={currentUser}
+            tables={tables}
+            settings={settings}
+            onLogout={handleLogout}
+            onExitPortal={() => navigate('/')}
+            onSuccessToast={(msg) => showToast(msg, 'success')}
+            onErrorToast={(msg) => showToast(msg, 'error')}
+            onTablesUpdated={handleTablesUpdated}
+            onSettingsUpdated={(newSettings) => setSettings(newSettings)}
+          />
+          {toast && (
+            <Toast
+              message={toast.message}
+              type={toast.type}
+              onClose={() => setToast(null)}
+            />
+          )}
+        </>
+      );
+    }
+
+    // If NOT authenticated, render 403 Unauthorized page
+    return (
+      <>
+        <UnauthorizedPage
+          onGoToLogin={() => navigate('/portal/login')}
+          onGoToHome={() => navigate('/')}
+        />
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </>
+    );
+  }
+
+  // ROUTE 3: Customer Public Website (/)
   return (
     <div className="min-h-screen bg-[#0b0f17] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
       
@@ -144,30 +253,16 @@ export default function App() {
         />
       )}
 
-      {/* Admin Login Modal */}
-      <AdminLoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-        onLoginSuccess={handleLoginSuccess}
-        onErrorToast={(msg) => showToast(msg, 'error')}
-      />
-
-      {/* Navigation Header */}
+      {/* Customer Navigation Header */}
       <Navbar
         settings={settings}
         currentUser={currentUser}
         adminWhatsApp={settings?.admin_whatsapp || '085181959275'}
-        onOpenAdminLogin={() => {
-          if (currentUser) {
-            setViewMode('admin');
-          } else {
-            setLoginModalOpen(true);
-          }
-        }}
-        onGoToAdminDashboard={() => setViewMode('admin')}
+        onOpenAdminLogin={() => navigate('/portal/login')}
+        onGoToAdminDashboard={() => navigate('/portal/dashboard')}
       />
 
-      {/* Main Content Sections */}
+      {/* Main Content Sections - Customer Only */}
       <main className="flex-1">
         {/* Hero Banner */}
         <Hero settings={settings} />
@@ -197,16 +292,10 @@ export default function App() {
         <VenueInfo settings={settings} />
       </main>
 
-      {/* Footer */}
+      {/* Customer Footer */}
       <Footer
         settings={settings}
-        onOpenAdminLogin={() => {
-          if (currentUser) {
-            setViewMode('admin');
-          } else {
-            setLoginModalOpen(true);
-          }
-        }}
+        onOpenAdminLogin={() => navigate('/portal/login')}
       />
 
       {/* Floating WhatsApp Quick Contact Button (Super Admin: 085181959275) */}

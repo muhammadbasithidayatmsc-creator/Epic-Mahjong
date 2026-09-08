@@ -11,7 +11,8 @@ import {
   Shield, 
   Menu, 
   X,
-  Sparkles
+  Sparkles,
+  KeyRound
 } from 'lucide-react';
 import { UserProfile, MahjongTable, BusinessSettings } from '../../types';
 import { AdminDashboard } from './AdminDashboard';
@@ -20,6 +21,7 @@ import { AdminSchedule } from './AdminSchedule';
 import { AdminTables } from './AdminTables';
 import { AdminUsers } from './AdminUsers';
 import { AdminSettings } from './AdminSettings';
+import { AdminAccountSettings } from './AdminAccountSettings';
 
 interface AdminPortalProps {
   user: UserProfile;
@@ -33,7 +35,7 @@ interface AdminPortalProps {
   onSettingsUpdated?: (settings: BusinessSettings) => void;
 }
 
-type AdminTab = 'dashboard' | 'reservations' | 'schedule' | 'tables' | 'users' | 'settings';
+type AdminTab = 'dashboard' | 'reservations' | 'schedule' | 'tables' | 'users' | 'settings' | 'account';
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   user,
@@ -62,11 +64,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'reservations' as AdminTab, label: 'Reservasi', icon: CalendarDays },
     { id: 'schedule' as AdminTab, label: 'Jadwal Meja', icon: Clock },
-    { id: 'tables' as AdminTab, label: 'Kelola Meja', icon: TableProperties },
     ...(isSuperAdmin ? [
-      { id: 'users' as AdminTab, label: 'Kelola Owner', icon: Users },
+      { id: 'tables' as AdminTab, label: 'Kelola Meja', icon: TableProperties },
+      { id: 'users' as AdminTab, label: 'MANAJEMEN USER', icon: Users },
       { id: 'settings' as AdminTab, label: 'Pengaturan Bisnis', icon: Settings }
-    ] : [])
+    ] : []),
+    { id: 'account' as AdminTab, label: 'Pengaturan Akun', icon: KeyRound }
   ];
 
   return (
@@ -244,7 +247,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             <AdminSchedule onErrorToast={onErrorToast} />
           )}
 
-          {activeTab === 'tables' && (
+          {activeTab === 'tables' && isSuperAdmin && (
             <AdminTables
               user={user}
               onSuccessToast={onSuccessToast}
@@ -253,7 +256,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             />
           )}
 
-          {activeTab === 'users' && (
+          {activeTab === 'users' && isSuperAdmin && (
             <AdminUsers
               currentUser={user}
               onSuccessToast={onSuccessToast}
@@ -261,12 +264,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             />
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && isSuperAdmin && (
             <AdminSettings
               user={user}
               onSuccessToast={onSuccessToast}
               onErrorToast={onErrorToast}
               onSettingsUpdated={onSettingsUpdated}
+            />
+          )}
+
+          {activeTab === 'account' && (
+            <AdminAccountSettings
+              user={user}
+              onSuccessToast={onSuccessToast}
+              onErrorToast={onErrorToast}
             />
           )}
         </main>

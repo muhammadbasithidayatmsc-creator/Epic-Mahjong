@@ -89,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>WhatsApp Admin</span>
             </a>
 
-            {activeUser && (
+            {activeUser ? (
               <button
                 id="nav-admin-dashboard-btn"
                 onClick={handleDashboard}
@@ -97,6 +97,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Dashboard ({activeUser.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Owner'})</span>
+              </button>
+            ) : (
+              <button
+                id="nav-staff-login-btn"
+                onClick={onOpenAdminLogin}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-700/80 bg-slate-800/40 text-slate-300 hover:text-amber-300 hover:border-amber-500/40 transition-all text-xs font-medium cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>Login Staff</span>
               </button>
             )}
           </div>
@@ -167,7 +176,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>WhatsApp Admin (085181959275)</span>
             </a>
 
-            {activeUser && (
+            {activeUser ? (
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -177,6 +186,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>Masuk Dashboard ({activeUser.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Owner'})</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenAdminLogin();
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-slate-700/80 bg-slate-800/60 text-slate-200 hover:text-amber-300 text-xs font-semibold cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>Portal Login Staff (Super Admin & Owner)</span>
               </button>
             )}
           </div>

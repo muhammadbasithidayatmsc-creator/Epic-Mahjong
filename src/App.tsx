@@ -22,12 +22,17 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
   
-  // URL path routing state
-  const [currentPath, setCurrentPath] = useState<string>(() => {
+  // URL path routing state helper
+  const getCleanPath = () => {
     const p = window.location.pathname.toLowerCase();
-    const h = window.location.hash.toLowerCase().replace('#', '');
-    return h.startsWith('/') ? h : p;
-  });
+    const hash = window.location.hash.toLowerCase().replace(/^#\/?/, '');
+    if (hash.includes('login') || hash.includes('portal') || hash.includes('admin') || hash.includes('dashboard')) {
+      return '/' + hash;
+    }
+    return p;
+  };
+
+  const [currentPath, setCurrentPath] = useState<string>(getCleanPath);
 
   // Modals & temporary state
   const [successBookingData, setSuccessBookingData] = useState<{
@@ -66,10 +71,7 @@ export default function App() {
   // Listen to browser navigation (back/forward buttons)
   useEffect(() => {
     const handleLocationChange = () => {
-      const p = window.location.pathname.toLowerCase();
-      const h = window.location.hash.toLowerCase().replace('#', '');
-      const path = h.startsWith('/') ? h : p;
-      setCurrentPath(path);
+      setCurrentPath(getCleanPath());
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -145,12 +147,20 @@ export default function App() {
   };
 
   // Path categorization
-  const isInternalLoginRoute = currentPath === '/portal/login' || currentPath === '/admin/login';
+  const isInternalLoginRoute = 
+    currentPath === '/portal/login' || 
+    currentPath === '/admin/login' ||
+    currentPath === '/login' ||
+    currentPath === '/portal' ||
+    currentPath.endsWith('/login') ||
+    currentPath.endsWith('/portal');
+  
   const isProtectedAdminRoute = (
     currentPath.startsWith('/portal') || 
     currentPath.startsWith('/admin') || 
     currentPath === '/dashboard' ||
-    currentPath === '/settings'
+    currentPath === '/settings' ||
+    currentPath.includes('dashboard')
   ) && !isInternalLoginRoute;
 
   // ROUTE 1: Dedicated Internal Portal Login (/portal/login or /admin/login)

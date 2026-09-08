@@ -70,6 +70,16 @@ export const Footer: React.FC<FooterProps> = ({ settings, onOpenAdminLogin }) =>
             <p className="text-[11px] text-slate-500 pt-1">
               Buka setiap hari: 10:00 - 02:00 WIB
             </p>
+            <div className="pt-2">
+              <button
+                id="footer-staff-login-button"
+                onClick={onOpenAdminLogin}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-700/80 hover:border-amber-500/50 text-slate-300 hover:text-amber-400 text-xs font-medium transition-all cursor-pointer shadow-sm"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>Portal Login Staff (Admin & Owner)</span>
+              </button>
+            </div>
           </div>
 
         </div>

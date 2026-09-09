@@ -54,6 +54,39 @@ function requireRole(allowedRoles: UserRole[]) {
   };
 }
 
+function formatIndoDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const year = match[1];
+    const monthIdx = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    if (monthIdx >= 0 && monthIdx < 12) {
+      return `${day} ${months[monthIdx]} ${year}`;
+    }
+  }
+  return dateStr;
+}
+
+function formatSlotTime(timeStr: string): string {
+  if (!timeStr) return '';
+  if (timeStr.includes('-')) return timeStr;
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hour = parseInt(match[1], 10);
+    const min = match[2];
+    const endHour = (hour + 2) % 24;
+    const startStr = `${String(hour).padStart(2, '0')}:${min}`;
+    const endStr = `${String(endHour).padStart(2, '0')}:${min}`;
+    return `${startStr} - ${endStr}`;
+  }
+  return timeStr;
+}
+
 // ==========================================
 // WHATSAPP URL GENERATOR HELPER
 // ==========================================
@@ -75,36 +108,24 @@ function formatWhatsAppUrl(adminPhone: string, reservation: {
     phone = '62' + phone;
   }
 
+  const formattedDate = formatIndoDate(reservation.reservation_date);
+  const formattedTime = formatSlotTime(reservation.reservation_time);
+
   const message = 
-`Halo Admin EPIC MAHJONG,
+`Halo EPIC MAHJONG,
 
 Saya ingin melakukan reservasi meja.
 
-Booking ID:
-${reservation.booking_code}
+Booking ID: ${reservation.booking_code}
+Nama: ${reservation.customer_name}
+No. WhatsApp: ${reservation.customer_phone}
+Tanggal: ${formattedDate}
+Jam: ${formattedTime}
+Meja: ${reservation.table_name}
+Jumlah orang: ${reservation.guest_count}
+Catatan: ${reservation.notes && reservation.notes.trim() ? reservation.notes.trim() : '-'}
 
-Nama:
-${reservation.customer_name}
-
-No. WhatsApp:
-${reservation.customer_phone}
-
-Tanggal:
-${reservation.reservation_date}
-
-Jam:
-${reservation.reservation_time}
-
-Meja:
-${reservation.table_name}
-
-Jumlah orang:
-${reservation.guest_count}
-
-Catatan:
-${reservation.notes ? reservation.notes : '-'}
-
-Mohon informasi terkait harga dan proses pembayaran.
+Mohon informasi terkait pembayaran dan konfirmasi reservasi.
 
 Terima kasih.`;
 
@@ -226,7 +247,7 @@ app.post('/api/public/reservations', (req, res) => {
     });
   } catch (err: any) {
     // Check for double-booking conflict error
-    if (err.message && err.message.includes('baru saja dibooking')) {
+    if (err.message && (err.message.includes('baru saja dipesan') || err.message.includes('baru saja dibooking'))) {
       return res.status(409).json({ error: err.message });
     }
     res.status(400).json({ error: err.message || 'Gagal membuat reservasi.' });

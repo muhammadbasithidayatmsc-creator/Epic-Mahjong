@@ -316,7 +316,6 @@ export const db = {
         status,
         activeReservation: activeRes ? {
           booking_code: activeRes.booking_code,
-          customer_name: activeRes.customer_name,
           status: activeRes.status
         } : undefined
       };
@@ -370,7 +369,7 @@ export const db = {
   }): Reservation {
     // 1. Strict Anti-Double Booking Check
     if (this.isSlotOccupied(data.table_id, data.reservation_date, data.reservation_time)) {
-      throw new Error('Maaf, meja tersebut baru saja dibooking. Silakan pilih meja atau jam lainnya.');
+      throw new Error('Maaf, meja ini baru saja dipesan oleh customer lain. Silakan pilih meja atau waktu lainnya.');
     }
 
     const table = this.getTableById(data.table_id);

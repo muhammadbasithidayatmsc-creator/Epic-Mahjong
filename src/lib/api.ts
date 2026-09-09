@@ -78,6 +78,39 @@ export const DEFAULT_TABLES: MahjongTable[] = [
   }
 ];
 
+export function formatIndoDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const year = match[1];
+    const monthIdx = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    if (monthIdx >= 0 && monthIdx < 12) {
+      return `${day} ${months[monthIdx]} ${year}`;
+    }
+  }
+  return dateStr;
+}
+
+export function formatSlotTime(timeStr: string): string {
+  if (!timeStr) return '';
+  if (timeStr.includes('-')) return timeStr;
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hour = parseInt(match[1], 10);
+    const min = match[2];
+    const endHour = (hour + 2) % 24;
+    const startStr = `${String(hour).padStart(2, '0')}:${min}`;
+    const endStr = `${String(endHour).padStart(2, '0')}:${min}`;
+    return `${startStr} - ${endStr}`;
+  }
+  return timeStr;
+}
+
 // Helper: generate formatted WhatsApp details for Super Admin
 export function buildWhatsAppLinks(adminPhoneInput: string, res: {
   booking_code: string;
@@ -99,36 +132,24 @@ export function buildWhatsAppLinks(adminPhoneInput: string, res: {
     phone = '6285181959275';
   }
 
+  const formattedDate = formatIndoDate(res.reservation_date);
+  const formattedTime = formatSlotTime(res.reservation_time);
+
   const message = 
-`Halo Admin EPIC MAHJONG,
+`Halo EPIC MAHJONG,
 
 Saya ingin melakukan reservasi meja.
 
-Booking ID:
-${res.booking_code}
+Booking ID: ${res.booking_code}
+Nama: ${res.customer_name}
+No. WhatsApp: ${res.customer_phone}
+Tanggal: ${formattedDate}
+Jam: ${formattedTime}
+Meja: ${res.table_name}
+Jumlah orang: ${res.guest_count}
+Catatan: ${res.notes && res.notes.trim() ? res.notes.trim() : '-'}
 
-Nama:
-${res.customer_name}
-
-No. WhatsApp:
-${res.customer_phone}
-
-Tanggal:
-${res.reservation_date}
-
-Jam:
-${res.reservation_time}
-
-Meja:
-${res.table_name}
-
-Jumlah orang:
-${res.guest_count}
-
-Catatan:
-${res.notes && res.notes.trim() ? res.notes.trim() : '-'}
-
-Mohon informasi terkait harga dan proses pembayaran.
+Mohon informasi terkait pembayaran dan konfirmasi reservasi.
 
 Terima kasih.`;
 
@@ -314,12 +335,12 @@ export const api = {
         r => r.table_id === t.id &&
              r.reservation_date === qDate &&
              r.reservation_time === qTime &&
-             r.status !== 'CANCELLED'
+             (r.status === 'PENDING' || r.status === 'CONFIRMED')
       );
       let status: TableAvailabilityStatus = 'AVAILABLE';
       if (activeRes) {
         if (activeRes.status === 'PENDING') status = 'PENDING';
-        else if (activeRes.status === 'CONFIRMED' || activeRes.status === 'COMPLETED') status = 'BOOKED';
+        else if (activeRes.status === 'CONFIRMED') status = 'BOOKED';
       }
       return {
         ...t,
@@ -340,7 +361,7 @@ export const api = {
     // Fallback: Generate full schedule matrix for all 8 time slots and all 5 tables
     const timeSlots = DEFAULT_SETTINGS.time_slots;
     const localReservations = getLocalReservations().filter(
-      r => r.reservation_date === qDate && r.status !== 'CANCELLED'
+      r => r.reservation_date === qDate && (r.status === 'PENDING' || r.status === 'CONFIRMED')
     );
 
     const slots: ScheduleSlot[] = timeSlots.map(tSlot => {
@@ -353,7 +374,7 @@ export const api = {
           let tblStatus: TableAvailabilityStatus = 'AVAILABLE';
           if (matchingRes) {
             if (matchingRes.status === 'PENDING') tblStatus = 'PENDING';
-            else if (matchingRes.status === 'CONFIRMED' || matchingRes.status === 'COMPLETED') tblStatus = 'BOOKED';
+            else if (matchingRes.status === 'CONFIRMED') tblStatus = 'BOOKED';
           }
           return {
             table_id: tbl.id,
@@ -402,13 +423,24 @@ export const api = {
     }
 
     // If backend returns an explicit JSON error (e.g. double booking validation)
-    if (res.isJson && res.data?.error && res.status === 400) {
+    if (res.isJson && res.data?.error && (res.status === 400 || res.status === 409)) {
       // If table is already booked on backend, throw the message
       throw new Error(res.data.error);
     }
 
     // FALLBACK for static environments (e.g., Vercel static deployment or offline server)
-    // NEVER fail with JSON parse error; generate reservation and WhatsApp link seamlessly!
+    // Validate anti-double booking locally first
+    const localReservations = getLocalReservations();
+    const isOccupiedLocally = localReservations.some(
+      r => r.table_id === payload.table_id &&
+           r.reservation_date === payload.reservation_date &&
+           r.reservation_time === payload.reservation_time &&
+           (r.status === 'PENDING' || r.status === 'CONFIRMED')
+    );
+    if (isOccupiedLocally) {
+      throw new Error('Maaf, meja ini baru saja dipesan oleh customer lain. Silakan pilih meja atau waktu lainnya.');
+    }
+
     const targetTable = DEFAULT_TABLES.find(t => t.id === payload.table_id) || {
       id: payload.table_id,
       name: payload.table_id.toUpperCase()

@@ -6,7 +6,6 @@ import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { BookingSection } from './components/BookingSection';
 import { TableShowcase } from './components/TableShowcase';
-import { ScheduleView } from './components/ScheduleView';
 import { HowToBook } from './components/HowToBook';
 import { VenueInfo } from './components/VenueInfo';
 import { Footer } from './components/Footer';
@@ -272,18 +271,9 @@ export default function App() {
         onGoToAdminDashboard={() => navigate('/portal/dashboard')}
       />
 
-      {/* Main Content Sections - Customer Only */}
+      {/* Main Content Sections - Customer-First Priority */}
       <main className="flex-1">
-        {/* Hero Banner */}
-        <Hero settings={settings} />
-
-        {/* 5 Tables Showcase */}
-        <TableShowcase
-          tables={tables}
-          onSelectForBooking={(tblId) => setSelectedTableId(tblId)}
-        />
-
-        {/* Booking Form with Realtime Status */}
+        {/* 1. TABLE AVAILABILITY & SCHEDULE (Jadwal Meja Hari Ini & Mendatang + Formulir Booking) */}
         <BookingSection
           tables={tables}
           settings={settings}
@@ -292,13 +282,23 @@ export default function App() {
           onErrorToast={(msg) => showToast(msg, 'error')}
         />
 
-        {/* Schedule Matrix View */}
-        <ScheduleView />
+        {/* 2. 5 Tables Showcase with Room Features */}
+        <TableShowcase
+          tables={tables}
+          onSelectForBooking={(tblId) => {
+            setSelectedTableId(tblId);
+            const el = document.getElementById('schedule-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+        />
 
-        {/* How to Book Guide */}
+        {/* 3. Luxury Experience & Venue Highlight */}
+        <Hero settings={settings} />
+
+        {/* 4. How to Book Guide */}
         <HowToBook />
 
-        {/* Venue Information & Location (Alam Sutera) */}
+        {/* 5. Venue Information & Location (Alam Sutera) */}
         <VenueInfo settings={settings} />
       </main>
 

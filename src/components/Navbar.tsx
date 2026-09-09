@@ -59,14 +59,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop Nav Links */}
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
-            <a href="#booking-section" className="hover:text-amber-400 transition-colors">
-              Reservasi Meja
+            <a href="#schedule-section" className="text-amber-400 font-bold hover:text-amber-300 transition-colors">
+              Jadwal Meja
+            </a>
+            <a href="#booking-form-card" className="hover:text-amber-400 transition-colors">
+              Formulir Booking
             </a>
             <a href="#tables-section" className="hover:text-amber-400 transition-colors">
               Pilihan Meja
-            </a>
-            <a href="#schedule-section" className="hover:text-amber-400 transition-colors">
-              Jadwal Meja
             </a>
             <a href="#guide-section" className="hover:text-amber-400 transition-colors">
               Cara Booking
@@ -129,12 +129,19 @@ export const Navbar: React.FC<NavbarProps> = ({
       {mobileMenuOpen && (
         <div id="mobile-menu" className="md:hidden border-b border-slate-800 bg-[#0b0f17] px-4 pt-3 pb-5 space-y-3">
           <a
-            href="#booking-section"
+            href="#schedule-section"
             onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center gap-2 py-2 text-sm font-medium text-slate-200 hover:text-amber-400"
+            className="flex items-center gap-2 py-2 text-sm font-bold text-amber-400 hover:text-amber-300"
           >
             <CalendarCheck className="w-4 h-4 text-amber-400" />
-            <span>Reservasi Meja</span>
+            <span>Jadwal Meja Hari Ini & Mendatang</span>
+          </a>
+          <a
+            href="#booking-form-card"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 text-sm font-medium text-slate-200 hover:text-amber-400"
+          >
+            Formulir Booking
           </a>
           <a
             href="#tables-section"
@@ -142,13 +149,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="block py-2 text-sm font-medium text-slate-200 hover:text-amber-400"
           >
             Pilihan Meja
-          </a>
-          <a
-            href="#schedule-section"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 text-sm font-medium text-slate-200 hover:text-amber-400"
-          >
-            Jadwal Meja
           </a>
           <a
             href="#guide-section"

@@ -21,7 +21,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { api, formatIndoDate, formatSlotTime } from '../lib/api';
-import { TableWithAvailability, BusinessSettings, Reservation, MahjongTable, ScheduleSlot } from '../types';
+import { TableWithAvailability, BusinessSettings, Reservation, MahjongTable, ScheduleSlot, PlaySession } from '../types';
 
 interface BookingSectionProps {
   tables?: MahjongTable[];
@@ -98,13 +98,6 @@ function getIndoMonthShort(dateObj: Date): string {
   return months[dateObj.getMonth()];
 }
 
-function getTablePrice(tableId: string): string {
-  if (tableId === 'tbl-05') {
-    return 'Rp 250.000 / sesi (2 Jam)';
-  }
-  return 'Rp 150.000 / sesi (2 Jam)';
-}
-
 function getTableCapacityLabel(capacity: number, tableId: string): string {
   if (tableId === 'tbl-05' || capacity >= 6) {
     return '4–6 Players';
@@ -119,6 +112,10 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
   onBookingSuccess,
   onErrorToast
 }) => {
+  // Dynamic sessions from DB / Settings
+  const [sessions, setSessions] = useState<PlaySession[]>([]);
+  const [selectedSession, setSelectedSession] = useState<PlaySession | null>(null);
+
   // Today formatted as YYYY-MM-DD
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -192,8 +189,48 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
   const calendarInputRef = useRef<HTMLInputElement>(null);
   const customerNameInputRef = useRef<HTMLInputElement>(null);
 
-  const timeSlots = settings?.time_slots || STANDARD_TIME_SLOTS;
   const adminWhatsApp = settings?.admin_whatsapp || '085181959275';
+
+  // Load dynamic sessions from DB
+  const loadSessionsData = async () => {
+    try {
+      const data = await api.getPublicSessions();
+      if (Array.isArray(data) && data.length > 0) {
+        setSessions(data);
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    loadSessionsData();
+  }, []);
+
+  // Compute active sessions to display in matrix
+  const displaySessions = useMemo<PlaySession[]>(() => {
+    if (sessions && sessions.length > 0) {
+      return sessions.filter(s => s.status === 'ACTIVE');
+    }
+    if (daySchedule && daySchedule.length > 0) {
+      return daySchedule.map(s => ({
+        session_id: s.session_id || `ses-${s.time}`,
+        session_name: s.session_name || `Sesi ${s.time}`,
+        start_time: s.start_time || s.time,
+        end_time: s.end_time || formatSlotTime(s.time).split(' - ')[1] || '12:00',
+        status: 'ACTIVE' as const,
+        created_at: '',
+        updated_at: ''
+      }));
+    }
+    return STANDARD_TIME_SLOTS.map((t, idx) => ({
+      session_id: `ses-0${idx + 1}`,
+      session_name: `Sesi ${idx + 1}`,
+      start_time: t,
+      end_time: formatSlotTime(t).split(' - ')[1] || '12:00',
+      status: 'ACTIVE' as const,
+      created_at: '',
+      updated_at: ''
+    }));
+  }, [sessions, daySchedule]);
 
   // Sync tables from props if provided
   useEffect(() => {
@@ -247,6 +284,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             if (fresh.status !== 'AVAILABLE') {
               // Table became booked during session
               setSelectedTable(null);
+              setSelectedSession(null);
             } else {
               setSelectedTable(fresh);
             }
@@ -277,31 +315,36 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     return () => clearInterval(timer);
   }, [selectedDate, selectedTime, selectedTable]);
 
-  // Check status of a specific table at a specific time slot from daySchedule
-  const getSlotStatus = (tableId: string, time: string): 'AVAILABLE' | 'PENDING' | 'BOOKED' => {
+  // Check status of a specific table at a specific session from daySchedule
+  const getSlotStatus = (tableId: string, session: PlaySession): 'AVAILABLE' | 'PENDING' | 'BOOKED' => {
     if (!daySchedule || daySchedule.length === 0) return 'AVAILABLE';
-    const slot = daySchedule.find(s => s.time === time);
+    const slot = daySchedule.find(s => 
+      (s.session_id && s.session_id === session.session_id) || 
+      s.time === session.start_time
+    );
     if (!slot) return 'AVAILABLE';
     const tbl = slot.tables.find(t => t.table_id === tableId);
     return tbl?.status || 'AVAILABLE';
   };
 
   // Handle clicking a specific time slot for a table
-  const handleSelectSlot = (table: TableWithAvailability, time: string) => {
-    const status = getSlotStatus(table.id, time);
+  const handleSelectSlot = (table: TableWithAvailability, session: PlaySession) => {
+    const status = getSlotStatus(table.id, session);
+    const sessionLabel = `${session.session_name} (${session.start_time}–${session.end_time} WIB)`;
 
     if (status === 'BOOKED') {
-      onErrorToast(`Slot ${formatSlotTime(time)} WIB untuk ${table.name} sudah terisi (BOOKED). Silakan pilih slot hijau (AVAILABLE) lainnya.`);
+      onErrorToast(`Slot ${sessionLabel} untuk ${table.name} sudah terisi (BOOKED). Silakan pilih slot hijau (AVAILABLE) lainnya.`);
       return;
     }
     if (status === 'PENDING') {
-      onErrorToast(`Slot ${formatSlotTime(time)} WIB untuk ${table.name} sedang dalam proses konfirmasi (PENDING). Silakan pilih slot yang berstatus AVAILABLE.`);
+      onErrorToast(`Slot ${sessionLabel} untuk ${table.name} sedang dalam proses konfirmasi (PENDING). Silakan pilih slot yang berstatus AVAILABLE.`);
       return;
     }
 
-    // Set selected table, time slot, and guest count
+    // Set selected table, session, time, and guest count
     setSelectedTable(table);
-    setSelectedTime(time);
+    setSelectedSession(session);
+    setSelectedTime(session.start_time);
     setGuestCount(table.capacity || 4);
     setConflictError(null);
 
@@ -368,7 +411,11 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
         customer_name: customerName.trim(),
         customer_phone: customerPhone.trim(),
         reservation_date: selectedDate,
-        reservation_time: selectedTime,
+        reservation_time: selectedSession ? selectedSession.start_time : selectedTime,
+        session_id: selectedSession?.session_id,
+        start_time: selectedSession?.start_time,
+        end_time: selectedSession?.end_time,
+        session_name: selectedSession?.session_name,
         table_id: selectedTable.id,
         guest_count: guestCount,
         notes: notes.trim()
@@ -399,6 +446,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       setCustomerPhone('');
       setNotes('');
       setSelectedTable(null);
+      setSelectedSession(null);
 
       // Refresh schedule immediately to reflect new status
       fetchScheduleAndAvailability();
@@ -412,6 +460,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
 
       // Reset selected table so user picks another available one
       setSelectedTable(null);
+      setSelectedSession(null);
       // Immediately refresh table availability to show new BOOKED status
       fetchScheduleAndAvailability();
     } finally {
@@ -631,7 +680,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   <tr>
                     <th className="py-4 px-5 font-bold text-amber-400 flex items-center gap-1.5 whitespace-nowrap bg-[#172030]">
                       <Clock className="w-4 h-4 text-amber-400" />
-                      <span>Jam Sesi (2 Jam)</span>
+                      <span>Sesi Jam Bermain</span>
                     </th>
                     {tables.map(table => (
                       <th key={table.id} className="py-4 px-3 font-bold text-center border-l border-slate-800/80">
@@ -647,38 +696,38 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                           <Users className="w-3 h-3 text-amber-400" />
                           <span>{getTableCapacityLabel(table.capacity, table.id)}</span>
                         </div>
-                        <div className="text-[10px] font-mono text-amber-400 font-bold mt-0.5">
-                          {getTablePrice(table.id).split(' ')[1]} / 2 Jam
-                        </div>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
-                  {timeSlots.map(time => {
-                    const timeRangeText = formatSlotTime(time);
+                  {displaySessions.map(session => {
+                    const sessionRangeText = `${session.start_time} – ${session.end_time}`;
                     return (
-                      <tr key={time} className="hover:bg-[#141b2b] transition-colors">
-                        <td className="py-3.5 px-5 font-mono font-bold text-slate-200 whitespace-nowrap bg-[#111724]/70">
-                          {timeRangeText} WIB
+                      <tr key={session.session_id || session.start_time} className="hover:bg-[#141b2b] transition-colors">
+                        <td className="py-3.5 px-5 font-bold text-slate-200 whitespace-nowrap bg-[#111724]/70">
+                          <div className="text-xs font-semibold text-amber-300">{session.session_name}</div>
+                          <div className="text-[11px] font-mono text-slate-300">{sessionRangeText} WIB</div>
                         </td>
 
                         {tables.map(table => {
-                          const status = getSlotStatus(table.id, time);
-                          const isSelected = selectedTable?.id === table.id && selectedTime === time;
+                          const status = getSlotStatus(table.id, session);
+                          const isSelected = selectedTable?.id === table.id && 
+                            (selectedSession ? selectedSession.session_id === session.session_id : selectedTime === session.start_time);
+                          const sessionLabel = `${session.session_name} (${sessionRangeText} WIB)`;
 
                           if (status === 'AVAILABLE') {
                             return (
                               <td key={table.id} className="py-2.5 px-2.5 text-center border-l border-slate-800/60">
                                 <button
                                   type="button"
-                                  onClick={() => handleSelectSlot(table, time)}
+                                  onClick={() => handleSelectSlot(table, session)}
                                   className={`w-full py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                                     isSelected
                                       ? 'bg-amber-400 text-slate-950 font-black shadow-lg ring-2 ring-amber-300'
                                       : 'bg-emerald-500/15 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/40 hover:border-emerald-400 shadow-sm'
                                   }`}
-                                  title={`Pilih ${table.name} pukul ${timeRangeText} WIB`}
+                                  title={`Pilih ${table.name} ${sessionLabel}`}
                                 >
                                   {isSelected ? (
                                     <>
@@ -701,7 +750,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                               <td key={table.id} className="py-2.5 px-2.5 text-center border-l border-slate-800/60">
                                 <button
                                   type="button"
-                                  onClick={() => onErrorToast(`Slot ${timeRangeText} WIB di ${table.name} sedang dalam proses konfirmasi.`)}
+                                  onClick={() => onErrorToast(`Slot ${sessionLabel} di ${table.name} sedang dalam proses konfirmasi.`)}
                                   className="w-full py-2 px-2.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-400/90 border border-amber-500/25 cursor-not-allowed opacity-80 flex items-center justify-center gap-1"
                                   title="Menunggu konfirmasi admin"
                                 >
@@ -716,12 +765,12 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                             <td key={table.id} className="py-2.5 px-2.5 text-center border-l border-slate-800/60">
                               <button
                                 type="button"
-                                onClick={() => onErrorToast(`Slot ${timeRangeText} WIB di ${table.name} sudah terisi penuh (BOOKED).`)}
+                                onClick={() => onErrorToast(`Slot ${sessionLabel} di ${table.name} sudah terisi penuh (BOOKED).`)}
                                 className="w-full py-2 px-2.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-400/80 border border-rose-500/20 cursor-not-allowed opacity-75 flex items-center justify-center gap-1"
                                 title="Slot sudah terisi penuh"
                               >
                                 <Lock className="w-3 h-3 text-rose-400/60" />
-                                <span className="line-through text-slate-400 font-mono text-[11px]">{time}</span>
+                                <span className="line-through text-slate-400 font-mono text-[11px]">{session.start_time}</span>
                                 <span>BOOKED</span>
                               </button>
                             </td>
@@ -821,13 +870,16 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                     {selectedTable.name} • {getTableCapacityLabel(selectedTable.capacity, selectedTable.id)}
                   </div>
                   <div className="text-xs text-slate-300 mt-1">
-                    Tanggal: <strong className="text-amber-300">{formatIndoDate(selectedDate)}</strong> • Jam: <strong className="text-amber-300">{formatSlotTime(selectedTime)} WIB (2 Jam)</strong>
+                    Tanggal: <strong className="text-amber-300">{formatIndoDate(selectedDate)}</strong> • Sesi: <strong className="text-amber-300">{selectedSession ? `${selectedSession.session_name} (${selectedSession.start_time}–${selectedSession.end_time} WIB)` : `${formatSlotTime(selectedTime)} WIB`}</strong>
                   </div>
                 </div>
 
-                <div className="text-left sm:text-right font-mono font-bold text-amber-300 text-sm sm:text-base border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
-                  <div>{getTablePrice(selectedTable.id)}</div>
-                  <div className="text-[11px] font-sans font-normal text-slate-400">Epic Mahjong Alam Sutera</div>
+                <div className="text-left sm:text-right font-bold text-amber-300 text-sm sm:text-base border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
+                  <div className="text-xs text-emerald-400 font-mono flex items-center sm:justify-end gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>STATUS: AVAILABLE</span>
+                  </div>
+                  <div className="text-[11px] font-sans font-normal text-slate-400 mt-0.5">Epic Mahjong Alam Sutera</div>
                 </div>
               </div>
 
@@ -891,7 +943,9 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-400" />
-                      <span className="font-semibold text-amber-400">{formatSlotTime(selectedTime)} WIB</span>
+                      <span className="font-semibold text-amber-400">
+                        {selectedSession ? `${selectedSession.session_name}: ${selectedSession.start_time}–${selectedSession.end_time} WIB` : `${formatSlotTime(selectedTime)} WIB`}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -992,10 +1046,10 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   <div className="font-serif font-black text-amber-400 text-lg">EPIC MAHJONG</div>
                   <div className="font-serif font-bold text-slate-100 text-base">{selectedTable.name}</div>
                   <div className="text-xs text-slate-300 mt-0.5">
-                    {formatIndoDate(selectedDate)} • {formatSlotTime(selectedTime)} WIB
+                    {formatIndoDate(selectedDate)} • {selectedSession ? `${selectedSession.session_name} (${selectedSession.start_time}–${selectedSession.end_time} WIB)` : `${formatSlotTime(selectedTime)} WIB`}
                   </div>
-                  <div className="text-xs text-amber-400 font-semibold mt-0.5">
-                    {guestCount} Players • {getTablePrice(selectedTable.id)}
+                  <div className="text-xs text-emerald-400 font-semibold mt-0.5">
+                    {guestCount} Players • Slot Terverifikasi Tersedia
                   </div>
                 </div>
 

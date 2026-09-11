@@ -116,41 +116,45 @@ export const AdminSchedule: React.FC<AdminScheduleProps> = ({ onErrorToast }) =>
                   </td>
                 </tr>
               ) : (
-                schedule.map(slot => (
-                  <tr key={slot.time} className="hover:bg-[#141b2b] transition-colors">
-                    <td className="py-3.5 px-5 font-mono font-bold text-slate-200 whitespace-nowrap">
-                      {slot.time} WIB
-                    </td>
+                schedule.map(slot => {
+                  const timeRange = slot.end_time ? `${slot.start_time || slot.time} – ${slot.end_time}` : `${slot.time}`;
+                  return (
+                    <tr key={slot.session_id || slot.time} className="hover:bg-[#141b2b] transition-colors">
+                      <td className="py-3.5 px-5 font-bold text-slate-200 whitespace-nowrap">
+                        {slot.session_name && <div className="text-xs text-amber-300 font-semibold">{slot.session_name}</div>}
+                        <div className="font-mono text-xs text-slate-300">{timeRange} WIB</div>
+                      </td>
 
-                    {slot.tables.map(tbl => {
-                      let badgeBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
-                      let label = 'AVAILABLE';
+                      {slot.tables.map(tbl => {
+                        let badgeBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                        let label = 'AVAILABLE';
 
-                      if (tbl.status === 'PENDING') {
-                        badgeBg = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
-                        label = 'PENDING';
-                      } else if (tbl.status === 'BOOKED') {
-                        badgeBg = 'bg-rose-500/10 text-rose-400 border-rose-500/30';
-                        label = 'BOOKED';
-                      }
+                        if (tbl.status === 'PENDING') {
+                          badgeBg = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+                          label = 'PENDING';
+                        } else if (tbl.status === 'BOOKED') {
+                          badgeBg = 'bg-rose-500/10 text-rose-400 border-rose-500/30';
+                          label = 'BOOKED';
+                        }
 
-                      return (
-                        <td key={tbl.table_id} className="py-3.5 px-3 text-center">
-                          <div className="inline-flex flex-col items-center">
-                            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${badgeBg}`}>
-                              {label}
-                            </span>
-                            {tbl.booking_code && (
-                              <span className="text-[10px] text-slate-400 font-mono mt-1">
-                                {tbl.booking_code}
+                        return (
+                          <td key={tbl.table_id} className="py-3.5 px-3 text-center">
+                            <div className="inline-flex flex-col items-center">
+                              <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${badgeBg}`}>
+                                {label}
                               </span>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
+                              {tbl.booking_code && (
+                                <span className="text-[10px] text-slate-400 font-mono mt-1">
+                                  {tbl.booking_code}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -14,7 +14,8 @@ import {
   Sparkles,
   KeyRound,
   BarChart3,
-  UserCheck
+  UserCheck,
+  Timer
 } from 'lucide-react';
 import { UserProfile, MahjongTable, BusinessSettings } from '../../types';
 import { AdminDashboard } from './AdminDashboard';
@@ -26,6 +27,7 @@ import { AdminSettings } from './AdminSettings';
 import { AdminAccountSettings } from './AdminAccountSettings';
 import { AdminReports } from './AdminReports';
 import { AdminCustomers } from './AdminCustomers';
+import { AdminSessions } from './AdminSessions';
 
 interface AdminPortalProps {
   user: UserProfile;
@@ -39,7 +41,7 @@ interface AdminPortalProps {
   onSettingsUpdated?: (settings: BusinessSettings) => void;
 }
 
-type AdminTab = 'dashboard' | 'reservations' | 'schedule' | 'reports' | 'customers' | 'tables' | 'users' | 'settings' | 'account';
+type AdminTab = 'dashboard' | 'reservations' | 'schedule' | 'sessions' | 'reports' | 'customers' | 'tables' | 'users' | 'settings' | 'account';
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   user,
@@ -57,6 +59,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isSuperAdmin = user.role === 'SUPER_ADMIN';
+  const canManageSessions = user.role === 'SUPER_ADMIN' || user.role === 'OWNER';
 
   const navigateToReservations = (status?: string) => {
     if (status) setResStatusFilter(status);
@@ -68,6 +71,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'reservations' as AdminTab, label: 'Reservasi', icon: CalendarDays },
     { id: 'schedule' as AdminTab, label: 'Jadwal Meja', icon: Clock },
+    ...(canManageSessions ? [
+      { id: 'sessions' as AdminTab, label: '⏱️ Kelola Sesi Jam', icon: Timer }
+    ] : []),
     { id: 'reports' as AdminTab, label: '📊 REPORT', icon: BarChart3 },
     { id: 'customers' as AdminTab, label: '👥 DATABASE CUSTOMER', icon: Users },
     ...(isSuperAdmin ? [
@@ -251,6 +257,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
           {activeTab === 'schedule' && (
             <AdminSchedule onErrorToast={onErrorToast} />
+          )}
+
+          {activeTab === 'sessions' && canManageSessions && (
+            <AdminSessions
+              user={user}
+              onSuccessToast={onSuccessToast}
+              onErrorToast={onErrorToast}
+            />
           )}
 
           {activeTab === 'reports' && (

@@ -4,6 +4,18 @@ export type TableAvailabilityStatus = 'AVAILABLE' | 'PENDING' | 'BOOKED';
 
 export type UserRole = 'SUPER_ADMIN' | 'OWNER';
 
+export type SessionStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface PlaySession {
+  session_id: string;
+  session_name: string;
+  start_time: string; // HH:mm e.g. "10:00"
+  end_time: string;   // HH:mm e.g. "12:00"
+  status: SessionStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MahjongTable {
   id: string;
   name: string;
@@ -22,6 +34,10 @@ export interface Reservation {
   customer_phone: string;
   reservation_date: string; // YYYY-MM-DD
   reservation_time: string; // HH:mm (e.g., "14:00")
+  session_id?: string;
+  session_name?: string;
+  start_time?: string;
+  end_time?: string;
   table_id: string;
   table_name?: string;
   guest_count: number;
@@ -70,7 +86,11 @@ export interface TableWithAvailability extends MahjongTable {
 }
 
 export interface ScheduleSlot {
-  time: string;
+  time: string; // start_time or formatted time
+  session_id?: string;
+  session_name?: string;
+  start_time?: string;
+  end_time?: string;
   tables: {
     table_id: string;
     table_name: string;

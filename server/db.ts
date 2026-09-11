@@ -10,7 +10,9 @@ import {
   TableAvailabilityStatus,
   TableWithAvailability,
   ScheduleSlot,
-  ReservationStatus
+  ReservationStatus,
+  PlaySession,
+  SessionStatus
 } from '../src/types';
 
 interface DatabaseSchema {
@@ -18,6 +20,7 @@ interface DatabaseSchema {
   tables: MahjongTable[];
   reservations: Reservation[];
   settings: BusinessSettings;
+  sessions: PlaySession[];
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -98,6 +101,113 @@ const defaultTables: MahjongTable[] = [
   }
 ];
 
+// Initial default sessions
+export const defaultSessions: PlaySession[] = [
+  {
+    session_id: 'ses-01',
+    session_name: 'Sesi 1',
+    start_time: '10:00',
+    end_time: '12:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    session_id: 'ses-02',
+    session_name: 'Sesi 2',
+    start_time: '12:00',
+    end_time: '14:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    session_id: 'ses-03',
+    session_name: 'Sesi 3',
+    start_time: '14:00',
+    end_time: '16:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    session_id: 'ses-04',
+    session_name: 'Sesi 4',
+    start_time: '16:00',
+    end_time: '18:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    session_id: 'ses-05',
+    session_name: 'Sesi 5',
+    start_time: '18:00',
+    end_time: '20:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    session_id: 'ses-06',
+    session_name: 'Sesi 6',
+    start_time: '20:00',
+    end_time: '22:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    session_id: 'ses-07',
+    session_name: 'Sesi 7',
+    start_time: '22:00',
+    end_time: '00:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    session_id: 'ses-08',
+    session_name: 'Sesi 8',
+    start_time: '00:00',
+    end_time: '02:00',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
+// Parse HH:mm to minutes from midnight
+export function parseTimeToMinutes(t: string): number {
+  if (!t) return 0;
+  const parts = t.split(':');
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
+  return h * 60 + m;
+}
+
+// Check if two time intervals [startA, endA) and [startB, endB) overlap.
+function checkIntervalOverlap(sA: number, eA: number, sB: number, eB: number): boolean {
+  return Math.max(sA, sB) < Math.min(eA, eB);
+}
+
+// True if session A and session B overlap in time
+export function doSessionsOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+  let sA = parseTimeToMinutes(startA);
+  let eA = parseTimeToMinutes(endA);
+  if (eA <= sA) eA += 1440; // crosses midnight or reaches 00:00
+
+  let sB = parseTimeToMinutes(startB);
+  let eB = parseTimeToMinutes(endB);
+  if (eB <= sB) eB += 1440;
+
+  if (checkIntervalOverlap(sA, eA, sB, eB)) return true;
+  if (checkIntervalOverlap(sA + 1440, eA + 1440, sB, eB)) return true;
+  if (checkIntervalOverlap(sA, eA, sB + 1440, eB + 1440)) return true;
+
+  return false;
+}
+
 // Helper to seed initial users with bcrypt hashes
 function getInitialUsers(): (UserProfile & { password_hash: string })[] {
   // epicadmin2026 hash & epicowner2026 hash
@@ -146,12 +256,33 @@ function loadDatabase(): DatabaseSchema {
     try {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
-      // Ensure required collections
+      const loadedSessions: PlaySession[] = parsed.sessions && Array.isArray(parsed.sessions) && parsed.sessions.length > 0 
+        ? parsed.sessions 
+        : defaultSessions;
+
+      // Migrate reservations without session_id if any
+      const loadedReservations: Reservation[] = (parsed.reservations || []).map((r: any) => {
+        if (!r.session_id && r.reservation_time) {
+          const matchedSession = loadedSessions.find(s => s.start_time === r.reservation_time);
+          if (matchedSession) {
+            return {
+              ...r,
+              session_id: matchedSession.session_id,
+              session_name: matchedSession.session_name,
+              start_time: matchedSession.start_time,
+              end_time: matchedSession.end_time
+            };
+          }
+        }
+        return r;
+      });
+
       return {
         users: parsed.users || getInitialUsers(),
         tables: parsed.tables && parsed.tables.length > 0 ? parsed.tables : defaultTables,
-        reservations: parsed.reservations || [],
-        settings: { ...defaultSettings, ...(parsed.settings || {}) }
+        reservations: loadedReservations,
+        settings: { ...defaultSettings, ...(parsed.settings || {}) },
+        sessions: loadedSessions
       };
     } catch (e) {
       console.error('[Database] Failed to read database file, reinitializing default:', e);
@@ -168,6 +299,10 @@ function loadDatabase(): DatabaseSchema {
       customer_phone: '081298765432',
       reservation_date: todayStr,
       reservation_time: '14:00',
+      session_id: 'ses-03',
+      session_name: 'Sesi 3',
+      start_time: '14:00',
+      end_time: '16:00',
       table_id: 'tbl-02',
       table_name: 'TABLE 02',
       guest_count: 4,
@@ -183,6 +318,10 @@ function loadDatabase(): DatabaseSchema {
       customer_phone: '081388990011',
       reservation_date: todayStr,
       reservation_time: '14:00',
+      session_id: 'ses-03',
+      session_name: 'Sesi 3',
+      start_time: '14:00',
+      end_time: '16:00',
       table_id: 'tbl-04',
       table_name: 'TABLE 04',
       guest_count: 5,
@@ -197,7 +336,8 @@ function loadDatabase(): DatabaseSchema {
     users: getInitialUsers(),
     tables: defaultTables,
     reservations: initialReservations,
-    settings: defaultSettings
+    settings: defaultSettings,
+    sessions: defaultSessions
   };
 
   saveDatabase(initialDb);
@@ -282,29 +422,206 @@ export const db = {
     return false;
   },
 
-  // ANTI-DOUBLE BOOKING VALIDATION
-  isSlotOccupied(tableId: string, date: string, time: string, excludeReservationId?: string): boolean {
+  // PLAY SESSIONS (CUSTOM SESI JAM BERMAIN)
+  getSessions(activeOnly = false): PlaySession[] {
+    const list = memoryDb.sessions || defaultSessions;
+    if (activeOnly) {
+      return list
+        .filter(s => s.status === 'ACTIVE')
+        .sort((a, b) => parseTimeToMinutes(a.start_time) - parseTimeToMinutes(b.start_time));
+    }
+    return [...list].sort((a, b) => parseTimeToMinutes(a.start_time) - parseTimeToMinutes(b.start_time));
+  },
+
+  getSessionById(id: string): PlaySession | undefined {
+    return (memoryDb.sessions || defaultSessions).find(s => s.session_id === id);
+  },
+
+  createSession(data: {
+    session_name: string;
+    start_time: string;
+    end_time: string;
+    status?: SessionStatus;
+  }): PlaySession {
+    const name = (data.session_name || '').trim();
+    const start = (data.start_time || '').trim();
+    const end = (data.end_time || '').trim();
+    const status: SessionStatus = data.status || 'ACTIVE';
+
+    if (!name || !start || !end) {
+      throw new Error('Nama sesi, jam mulai, dan jam selesai wajib diisi.');
+    }
+
+    // Overlap validation among ACTIVE sessions
+    if (status === 'ACTIVE') {
+      const activeList = (memoryDb.sessions || []).filter(s => s.status === 'ACTIVE');
+      const overlapping = activeList.find(s => doSessionsOverlap(start, end, s.start_time, s.end_time));
+      if (overlapping) {
+        throw new Error(
+          `Jam sesi bertabrakan dengan sesi yang sudah aktif (${overlapping.session_name}: ${overlapping.start_time}–${overlapping.end_time}). Silakan pilih rentang waktu lainnya.`
+        );
+      }
+    }
+
+    const newId = `ses-${Date.now().toString().slice(-5)}`;
+    const newSession: PlaySession = {
+      session_id: newId,
+      session_name: name,
+      start_time: start,
+      end_time: end,
+      status,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (!memoryDb.sessions) memoryDb.sessions = [...defaultSessions];
+    memoryDb.sessions.push(newSession);
+    saveDatabase(memoryDb);
+    return newSession;
+  },
+
+  updateSession(id: string, updates: Partial<PlaySession>): PlaySession {
+    if (!memoryDb.sessions) memoryDb.sessions = [...defaultSessions];
+    const idx = memoryDb.sessions.findIndex(s => s.session_id === id);
+    if (idx === -1) {
+      throw new Error('Sesi tidak ditemukan.');
+    }
+
+    const current = memoryDb.sessions[idx];
+    const updatedName = updates.session_name !== undefined ? updates.session_name.trim() : current.session_name;
+    const updatedStart = updates.start_time !== undefined ? updates.start_time.trim() : current.start_time;
+    const updatedEnd = updates.end_time !== undefined ? updates.end_time.trim() : current.end_time;
+    const updatedStatus = updates.status !== undefined ? updates.status : current.status;
+
+    if (!updatedName || !updatedStart || !updatedEnd) {
+      throw new Error('Nama sesi, jam mulai, dan jam selesai tidak boleh kosong.');
+    }
+
+    // Overlap validation among other ACTIVE sessions
+    if (updatedStatus === 'ACTIVE') {
+      const overlapping = memoryDb.sessions.find(
+        s => s.session_id !== id && s.status === 'ACTIVE' && doSessionsOverlap(updatedStart, updatedEnd, s.start_time, s.end_time)
+      );
+      if (overlapping) {
+        throw new Error(
+          `Jam sesi bertabrakan dengan sesi yang sudah aktif (${overlapping.session_name}: ${overlapping.start_time}–${overlapping.end_time}). Silakan pilih rentang waktu lainnya.`
+        );
+      }
+    }
+
+    memoryDb.sessions[idx] = {
+      ...current,
+      session_name: updatedName,
+      start_time: updatedStart,
+      end_time: updatedEnd,
+      status: updatedStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    saveDatabase(memoryDb);
+    return { ...memoryDb.sessions[idx] };
+  },
+
+  deleteSession(id: string): { success: boolean; deactivated?: boolean; message: string } {
+    if (!memoryDb.sessions) memoryDb.sessions = [...defaultSessions];
+    const session = memoryDb.sessions.find(s => s.session_id === id);
+    if (!session) {
+      throw new Error('Sesi tidak ditemukan.');
+    }
+
+    // Check if session has reservations
+    const hasReservations = memoryDb.reservations.some(
+      r => r.session_id === id || r.reservation_time === session.start_time
+    );
+
+    if (hasReservations) {
+      // Safe deactivation: do not delete, set to INACTIVE to protect history
+      session.status = 'INACTIVE';
+      session.updated_at = new Date().toISOString();
+      saveDatabase(memoryDb);
+      return {
+        success: true,
+        deactivated: true,
+        message: `Sesi "${session.session_name}" memiliki riwayat reservasi dan telah dinonaktifkan (NONAKTIF) agar histori booking tetap aman.`
+      };
+    }
+
+    memoryDb.sessions = memoryDb.sessions.filter(s => s.session_id !== id);
+    saveDatabase(memoryDb);
+    return {
+      success: true,
+      deactivated: false,
+      message: `Sesi "${session.session_name}" berhasil dihapus.`
+    };
+  },
+
+  // ANTI-DOUBLE BOOKING VALIDATION WITH SESSION & TIME OVERLAP CHECK
+  isSlotOccupied(
+    tableId: string,
+    date: string,
+    timeOrSessionId: string,
+    excludeReservationId?: string,
+    sessionInfo?: { start_time: string; end_time: string; session_id?: string }
+  ): boolean {
     return memoryDb.reservations.some(r => {
       if (excludeReservationId && r.id === excludeReservationId) return false;
       if (r.table_id !== tableId) return false;
       if (r.reservation_date !== date) return false;
-      if (r.reservation_time !== time) return false;
       // Active reservations: PENDING or CONFIRMED
-      return r.status === 'PENDING' || r.status === 'CONFIRMED';
+      if (r.status !== 'PENDING' && r.status !== 'CONFIRMED') return false;
+
+      // 1. Direct session_id match
+      if (sessionInfo?.session_id && r.session_id && r.session_id === sessionInfo.session_id) {
+        return true;
+      }
+
+      // 2. Direct time string match
+      if (r.reservation_time === timeOrSessionId) {
+        return true;
+      }
+
+      // 3. Time overlap check
+      if (sessionInfo?.start_time && sessionInfo?.end_time) {
+        const rStart = r.start_time || r.reservation_time;
+        let rEnd = r.end_time;
+        if (!rEnd && rStart) {
+          const startMin = parseTimeToMinutes(rStart);
+          const endMin = (startMin + 120) % 1440;
+          const eh = Math.floor(endMin / 60);
+          const em = endMin % 60;
+          rEnd = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+        }
+        if (rStart && rEnd) {
+          if (doSessionsOverlap(sessionInfo.start_time, sessionInfo.end_time, rStart, rEnd)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
     });
   },
 
-  // GET TABLE AVAILABILITY FOR A SPECIFIC DATE & TIME
-  getTableAvailability(date: string, time: string): TableWithAvailability[] {
+  // GET TABLE AVAILABILITY FOR A SPECIFIC DATE & TIME/SESSION
+  getTableAvailability(date: string, timeOrSessionId: string): TableWithAvailability[] {
     const activeTables = memoryDb.tables.filter(t => t.is_active);
+    const session = (memoryDb.sessions || defaultSessions).find(
+      s => s.session_id === timeOrSessionId || s.start_time === timeOrSessionId
+    );
 
     return activeTables.map(table => {
-      const activeRes = memoryDb.reservations.find(r => 
-        r.table_id === table.id &&
-        r.reservation_date === date &&
-        r.reservation_time === time &&
-        (r.status === 'PENDING' || r.status === 'CONFIRMED')
-      );
+      const activeRes = memoryDb.reservations.find(r => {
+        if (r.table_id !== table.id) return false;
+        if (r.reservation_date !== date) return false;
+        if (r.status !== 'PENDING' && r.status !== 'CONFIRMED') return false;
+
+        if (session && r.session_id && r.session_id === session.session_id) return true;
+        if (r.reservation_time === timeOrSessionId) return true;
+        if (session && r.start_time && r.end_time) {
+          return doSessionsOverlap(session.start_time, session.end_time, r.start_time, r.end_time);
+        }
+        return false;
+      });
 
       let status: TableAvailabilityStatus = 'AVAILABLE';
       if (activeRes) {
@@ -322,19 +639,35 @@ export const db = {
     });
   },
 
-  // GET COMPLETE SCHEDULE MATRIX FOR A DATE
+  // GET COMPLETE SCHEDULE MATRIX FOR A DATE (DYNAMIC ACTIVE SESSIONS)
   getScheduleForDate(date: string): ScheduleSlot[] {
-    const slots = memoryDb.settings.time_slots || defaultSettings.time_slots;
+    // Read only active sessions sorted by start_time
+    const activeSessions = this.getSessions(true);
     const activeTables = memoryDb.tables.filter(t => t.is_active);
 
-    return slots.map(time => {
+    return activeSessions.map(session => {
       const tablesInSlot = activeTables.map(t => {
-        const res = memoryDb.reservations.find(r => 
-          r.table_id === t.id &&
-          r.reservation_date === date &&
-          r.reservation_time === time &&
-          (r.status === 'PENDING' || r.status === 'CONFIRMED')
-        );
+        const res = memoryDb.reservations.find(r => {
+          if (r.table_id !== t.id) return false;
+          if (r.reservation_date !== date) return false;
+          if (r.status !== 'PENDING' && r.status !== 'CONFIRMED') return false;
+
+          if (r.session_id && r.session_id === session.session_id) return true;
+          if (r.reservation_time === session.start_time) return true;
+          const rStart = r.start_time || r.reservation_time;
+          let rEnd = r.end_time;
+          if (!rEnd && rStart) {
+            const startMin = parseTimeToMinutes(rStart);
+            const endMin = (startMin + 120) % 1440;
+            const eh = Math.floor(endMin / 60);
+            const em = endMin % 60;
+            rEnd = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+          }
+          if (rStart && rEnd) {
+            return doSessionsOverlap(session.start_time, session.end_time, rStart, rEnd);
+          }
+          return false;
+        });
 
         let status: TableAvailabilityStatus = 'AVAILABLE';
         if (res) {
@@ -350,7 +683,11 @@ export const db = {
       });
 
       return {
-        time,
+        time: session.start_time,
+        session_id: session.session_id,
+        session_name: session.session_name,
+        start_time: session.start_time,
+        end_time: session.end_time,
         tables: tablesInSlot
       };
     });
@@ -361,15 +698,42 @@ export const db = {
     customer_name: string;
     customer_phone: string;
     reservation_date: string;
-    reservation_time: string;
+    reservation_time?: string;
+    session_id?: string;
+    start_time?: string;
+    end_time?: string;
+    session_name?: string;
     table_id: string;
     guest_count: number;
     notes?: string;
     status?: ReservationStatus;
   }): Reservation {
+    // Resolve session if session_id or times provided
+    let matchedSession: PlaySession | undefined;
+    if (data.session_id) {
+      matchedSession = this.getSessionById(data.session_id);
+    }
+    if (!matchedSession && data.reservation_time) {
+      matchedSession = (memoryDb.sessions || defaultSessions).find(
+        s => s.start_time === data.reservation_time
+      );
+    }
+
+    const sessionId = matchedSession?.session_id || data.session_id;
+    const sessionName = matchedSession?.session_name || data.session_name || 'Sesi Bermain';
+    const startTime = matchedSession?.start_time || data.start_time || data.reservation_time || '10:00';
+    const endTime = matchedSession?.end_time || data.end_time || '12:00';
+    const reservationTime = startTime;
+
     // 1. Strict Anti-Double Booking Check
-    if (this.isSlotOccupied(data.table_id, data.reservation_date, data.reservation_time)) {
-      throw new Error('Maaf, meja ini baru saja dipesan oleh customer lain. Silakan pilih meja atau waktu lainnya.');
+    if (
+      this.isSlotOccupied(data.table_id, data.reservation_date, reservationTime, undefined, {
+        start_time: startTime,
+        end_time: endTime,
+        session_id: sessionId
+      })
+    ) {
+      throw new Error('Maaf, meja ini baru saja dipesan oleh customer lain untuk sesi/jam tersebut. Silakan pilih meja atau sesi lainnya.');
     }
 
     const table = this.getTableById(data.table_id);
@@ -387,7 +751,11 @@ export const db = {
       customer_name: data.customer_name.trim(),
       customer_phone: data.customer_phone.trim(),
       reservation_date: data.reservation_date,
-      reservation_time: data.reservation_time,
+      reservation_time: reservationTime,
+      session_id: sessionId,
+      session_name: sessionName,
+      start_time: startTime,
+      end_time: endTime,
       table_id: data.table_id,
       table_name: table.name,
       guest_count: Number(data.guest_count) || 4,

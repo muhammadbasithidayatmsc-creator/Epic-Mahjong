@@ -23,6 +23,9 @@ export const BookingSuccessModal: React.FC<BookingSuccessModalProps> = ({
 
   const formattedDate = formatIndoDate(reservation.reservation_date);
   const formattedTime = formatSlotTime(reservation.reservation_time);
+  const sessionDisplay = reservation.session_name 
+    ? `${reservation.session_name} (${formattedTime} WIB)`
+    : `${formattedTime} WIB`;
 
   const fullMessage = 
 `Halo EPIC MAHJONG,
@@ -33,7 +36,7 @@ Booking ID: ${reservation.booking_code}
 Nama: ${reservation.customer_name}
 No. WhatsApp: ${reservation.customer_phone}
 Tanggal: ${formattedDate}
-Jam: ${formattedTime}
+Jam Sesi: ${sessionDisplay}
 Meja: ${reservation.table_name || 'TABLE 01'}
 Jumlah orang: ${reservation.guest_count}
 Catatan: ${reservation.notes && reservation.notes.trim() ? reservation.notes.trim() : '-'}
@@ -169,7 +172,7 @@ Terima kasih.`;
             </div>
             <div className="flex justify-between py-1 border-b border-slate-800">
               <span className="text-slate-400">Jam Sesi:</span>
-              <span className="text-amber-400 font-semibold">{formattedTime} WIB</span>
+              <span className="text-amber-400 font-semibold">{sessionDisplay}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-800">
               <span className="text-slate-400">Meja:</span>

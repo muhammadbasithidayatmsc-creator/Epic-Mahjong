@@ -96,6 +96,9 @@ function formatWhatsAppUrl(adminPhone: string, reservation: {
   customer_phone: string;
   reservation_date: string;
   reservation_time: string;
+  session_name?: string;
+  start_time?: string;
+  end_time?: string;
   table_name: string;
   guest_count: number;
   notes?: string;
@@ -109,7 +112,9 @@ function formatWhatsAppUrl(adminPhone: string, reservation: {
   }
 
   const formattedDate = formatIndoDate(reservation.reservation_date);
-  const formattedTime = formatSlotTime(reservation.reservation_time);
+  const timeDisplay = reservation.session_name 
+    ? `${reservation.session_name} (${reservation.start_time || reservation.reservation_time} - ${reservation.end_time || ''} WIB)`
+    : formatSlotTime(reservation.reservation_time);
 
   const message = 
 `Halo EPIC MAHJONG,
@@ -120,12 +125,12 @@ Booking ID: ${reservation.booking_code}
 Nama: ${reservation.customer_name}
 No. WhatsApp: ${reservation.customer_phone}
 Tanggal: ${formattedDate}
-Jam: ${formattedTime}
+Jam / Sesi: ${timeDisplay}
 Meja: ${reservation.table_name}
 Jumlah orang: ${reservation.guest_count}
 Catatan: ${reservation.notes && reservation.notes.trim() ? reservation.notes.trim() : '-'}
 
-Mohon informasi terkait pembayaran dan konfirmasi reservasi.
+Mohon informasi terkait konfirmasi reservasi.
 
 Terima kasih.`;
 
@@ -163,12 +168,22 @@ app.get('/api/public/tables', (req, res) => {
   }
 });
 
+// 2b. Get Active Sessions for Customer
+app.get('/api/public/sessions', (req, res) => {
+  try {
+    const sessions = db.getSessions(true);
+    res.json(sessions);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Gagal memuat sesi jam bermain.' });
+  }
+});
+
 // 3. Get Table Availability for Selected Date & Time (with safe fallback)
 app.get('/api/public/availability', (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const date = String(req.query.date || today).trim() || today;
-    const time = String(req.query.time || '14:00').trim() || '14:00';
+    const time = String(req.query.time || '10:00').trim() || '10:00';
 
     const tables = db.getTableAvailability(date, time);
     res.json(tables);
@@ -178,7 +193,7 @@ app.get('/api/public/availability', (req, res) => {
   }
 });
 
-// 4. Get Table Schedule Matrix for a Given Date (with safe fallback)
+// 4. Get Table Schedule Matrix for a Given Date (Dynamic Sessions)
 app.get('/api/public/schedule', (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -200,14 +215,18 @@ app.post('/api/public/reservations', (req, res) => {
       customer_phone,
       reservation_date,
       reservation_time,
+      session_id,
+      start_time,
+      end_time,
+      session_name,
       table_id,
       guest_count,
       notes
     } = req.body;
 
     // Field validation
-    if (!customer_name || !customer_phone || !reservation_date || !reservation_time || !table_id) {
-      return res.status(400).json({ error: 'Nama, WhatsApp, Tanggal, Jam, dan Meja wajib diisi.' });
+    if (!customer_name || !customer_phone || !reservation_date || (!reservation_time && !session_id && !start_time) || !table_id) {
+      return res.status(400).json({ error: 'Nama, WhatsApp, Tanggal, Jam/Sesi, dan Meja wajib diisi.' });
     }
 
     // Anti-Double Booking validation happens atomically inside createReservation
@@ -215,7 +234,11 @@ app.post('/api/public/reservations', (req, res) => {
       customer_name,
       customer_phone,
       reservation_date,
-      reservation_time,
+      reservation_time: reservation_time || start_time || '10:00',
+      session_id,
+      start_time,
+      end_time,
+      session_name,
       table_id,
       guest_count: Number(guest_count) || 4,
       notes,
@@ -230,6 +253,9 @@ app.post('/api/public/reservations', (req, res) => {
       customer_phone: reservation.customer_phone,
       reservation_date: reservation.reservation_date,
       reservation_time: reservation.reservation_time,
+      session_name: reservation.session_name,
+      start_time: reservation.start_time,
+      end_time: reservation.end_time,
       table_name: reservation.table_name || 'TABLE',
       guest_count: reservation.guest_count,
       notes: reservation.notes
@@ -387,21 +413,29 @@ app.post('/api/admin/reservations', authenticateToken, (req, res) => {
       customer_phone,
       reservation_date,
       reservation_time,
+      session_id,
+      start_time,
+      end_time,
+      session_name,
       table_id,
       guest_count,
       notes,
       status
     } = req.body;
 
-    if (!customer_name || !customer_phone || !reservation_date || !reservation_time || !table_id) {
-      return res.status(400).json({ error: 'Nama, WhatsApp, Tanggal, Jam, dan Meja wajib diisi.' });
+    if (!customer_name || !customer_phone || !reservation_date || (!reservation_time && !session_id && !start_time) || !table_id) {
+      return res.status(400).json({ error: 'Nama, WhatsApp, Tanggal, Jam/Sesi, dan Meja wajib diisi.' });
     }
 
     const reservation = db.createReservation({
       customer_name,
       customer_phone,
       reservation_date,
-      reservation_time,
+      reservation_time: reservation_time || start_time || '10:00',
+      session_id,
+      start_time,
+      end_time,
+      session_name,
       table_id,
       guest_count: Number(guest_count) || 4,
       notes,
@@ -414,7 +448,7 @@ app.post('/api/admin/reservations', authenticateToken, (req, res) => {
       reservation
     });
   } catch (err: any) {
-    if (err.message && err.message.includes('baru saja dibooking')) {
+    if (err.message && err.message.includes('baru saja dipesan')) {
       return res.status(409).json({ error: err.message });
     }
     res.status(400).json({ error: err.message || 'Gagal membuat reservasi manual.' });
@@ -521,6 +555,68 @@ app.delete('/api/admin/tables/:id', authenticateToken, requireRole(['SUPER_ADMIN
     res.json({ success: true, message: 'Meja berhasil dihapus.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Gagal menghapus meja.' });
+  }
+});
+
+// ==========================================
+// SESSION MANAGEMENT (SUPER ADMIN & OWNER)
+// ==========================================
+
+// Get All Sessions
+app.get('/api/admin/sessions', authenticateToken, requireRole(['SUPER_ADMIN', 'OWNER']), (req, res) => {
+  try {
+    const sessions = db.getSessions(false);
+    res.json(sessions);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Gagal memuat sesi jam bermain.' });
+  }
+});
+
+// Create Session
+app.post('/api/admin/sessions', authenticateToken, requireRole(['SUPER_ADMIN', 'OWNER']), (req, res) => {
+  try {
+    const { session_name, start_time, end_time, status } = req.body;
+    if (!session_name || !start_time || !end_time) {
+      return res.status(400).json({ error: 'Nama sesi, jam mulai, dan jam selesai wajib diisi.' });
+    }
+    const session = db.createSession({ session_name, start_time, end_time, status });
+    res.status(201).json({ success: true, session });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal membuat sesi.' });
+  }
+});
+
+// Update Session
+app.put('/api/admin/sessions/:id', authenticateToken, requireRole(['SUPER_ADMIN', 'OWNER']), (req, res) => {
+  try {
+    const session = db.updateSession(req.params.id, req.body);
+    res.json({ success: true, session });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal memperbarui sesi.' });
+  }
+});
+
+// Toggle Session Status (ACTIVE / INACTIVE)
+app.patch('/api/admin/sessions/:id/status', authenticateToken, requireRole(['SUPER_ADMIN', 'OWNER']), (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status || (status !== 'ACTIVE' && status !== 'INACTIVE')) {
+      return res.status(400).json({ error: 'Status harus ACTIVE atau INACTIVE.' });
+    }
+    const session = db.updateSession(req.params.id, { status });
+    res.json({ success: true, session });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal mengubah status sesi.' });
+  }
+});
+
+// Delete or Safe Deactivate Session
+app.delete('/api/admin/sessions/:id', authenticateToken, requireRole(['SUPER_ADMIN', 'OWNER']), (req, res) => {
+  try {
+    const result = db.deleteSession(req.params.id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal menghapus sesi.' });
   }
 });
 

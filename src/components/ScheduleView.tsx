@@ -114,7 +114,7 @@ export const ScheduleView: React.FC = () => {
                 <tr>
                   <th className="py-4 px-5 font-semibold text-amber-400 flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
-                    <span>Jam Sesi</span>
+                    <span>Sesi Jam Bermain</span>
                   </th>
                   {tableNames.map(name => (
                     <th key={name} className="py-4 px-5 font-bold text-center">
@@ -139,10 +139,12 @@ export const ScheduleView: React.FC = () => {
                   </tr>
                 ) : (
                   schedule.map(slot => {
+                    const timeRange = slot.end_time ? `${slot.start_time || slot.time} – ${slot.end_time}` : `${slot.time}`;
                     return (
-                      <tr key={slot.time} className="hover:bg-[#141b2b] transition-colors">
-                        <td className="py-3.5 px-5 font-mono font-bold text-slate-200 whitespace-nowrap">
-                          {slot.time} WIB
+                      <tr key={slot.session_id || slot.time} className="hover:bg-[#141b2b] transition-colors">
+                        <td className="py-3.5 px-5 font-bold text-slate-200 whitespace-nowrap">
+                          {slot.session_name && <div className="text-xs text-amber-300 font-semibold">{slot.session_name}</div>}
+                          <div className="font-mono text-xs text-slate-300">{timeRange} WIB</div>
                         </td>
 
                         {slot.tables.map(tbl => {

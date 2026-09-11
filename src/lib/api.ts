@@ -6,12 +6,90 @@ import {
   TableAvailabilityStatus,
   ScheduleSlot,
   UserProfile,
-  ReservationStatus
+  ReservationStatus,
+  PlaySession,
+  SessionStatus
 } from '../types';
 
 const TOKEN_KEY = 'epic_mahjong_token';
 const LOCAL_RES_KEY = 'epic_mahjong_client_reservations';
 const LOCAL_SETTINGS_KEY = 'epic_mahjong_client_settings';
+const LOCAL_SESSIONS_KEY = 'epic_mahjong_client_sessions';
+
+export const DEFAULT_SESSIONS: PlaySession[] = [
+  {
+    session_id: 'ses-01',
+    session_name: 'Sesi 1 (Pagi)',
+    start_time: '10:00',
+    end_time: '12:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    session_id: 'ses-02',
+    session_name: 'Sesi 2 (Siang)',
+    start_time: '12:00',
+    end_time: '14:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    session_id: 'ses-03',
+    session_name: 'Sesi 3 (Siang Santai)',
+    start_time: '14:00',
+    end_time: '16:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    session_id: 'ses-04',
+    session_name: 'Sesi 4 (Sore)',
+    start_time: '16:00',
+    end_time: '18:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    session_id: 'ses-05',
+    session_name: 'Sesi 5 (Malam Awal)',
+    start_time: '18:00',
+    end_time: '20:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    session_id: 'ses-06',
+    session_name: 'Sesi 6 (Malam Utama)',
+    start_time: '20:00',
+    end_time: '22:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    session_id: 'ses-07',
+    session_name: 'Sesi 7 (Late Night)',
+    start_time: '22:00',
+    end_time: '00:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    session_id: 'ses-08',
+    session_name: 'Sesi 8 (Midnight)',
+    start_time: '00:00',
+    end_time: '02:00',
+    status: 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  }
+];
 
 export const DEFAULT_SETTINGS: BusinessSettings = {
   business_name: 'EPIC MAHJONG',
@@ -245,6 +323,30 @@ function saveLocalReservation(r: Reservation) {
   }
 }
 
+function getLocalSessions(): PlaySession[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_SESSIONS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  try {
+    localStorage.setItem(LOCAL_SESSIONS_KEY, JSON.stringify(DEFAULT_SESSIONS));
+  } catch (_) {}
+  return DEFAULT_SESSIONS;
+}
+
+function saveLocalSessions(sessions: PlaySession[]) {
+  try {
+    localStorage.setItem(LOCAL_SESSIONS_KEY, JSON.stringify(sessions));
+  } catch (err) {
+    console.warn('[LocalStorage] save sessions failed:', err);
+  }
+}
+
 // Safe fetch wrapper that handles HTML 404s (e.g. on Vercel) without JSON parse error
 async function safeFetch(url: string, options?: RequestInit): Promise<{
   ok: boolean;
@@ -350,6 +452,15 @@ export const api = {
     });
   },
 
+  async getPublicSessions(): Promise<PlaySession[]> {
+    const res = await safeFetch('/api/public/sessions');
+    if (res.ok && res.isJson && Array.isArray(res.data) && res.data.length > 0) {
+      return res.data;
+    }
+    const local = getLocalSessions().filter(s => s.status === 'ACTIVE');
+    return local.length > 0 ? local : DEFAULT_SESSIONS;
+  },
+
   async getSchedule(date?: string): Promise<ScheduleSlot[]> {
     const qDate = date || new Date().toISOString().split('T')[0];
     const res = await safeFetch(`/api/public/schedule?date=${encodeURIComponent(qDate)}`);
@@ -358,18 +469,23 @@ export const api = {
       return res.data;
     }
 
-    // Fallback: Generate full schedule matrix for all 8 time slots and all 5 tables
-    const timeSlots = DEFAULT_SETTINGS.time_slots;
+    // Fallback: Generate full schedule matrix using dynamic active sessions
+    const activeSessions = getLocalSessions().filter(s => s.status === 'ACTIVE');
+    const sessionsToUse = activeSessions.length > 0 ? activeSessions : DEFAULT_SESSIONS;
     const localReservations = getLocalReservations().filter(
       r => r.reservation_date === qDate && (r.status === 'PENDING' || r.status === 'CONFIRMED')
     );
 
-    const slots: ScheduleSlot[] = timeSlots.map(tSlot => {
+    const slots: ScheduleSlot[] = sessionsToUse.map(ses => {
       return {
-        time: tSlot,
+        time: ses.start_time,
+        session_id: ses.session_id,
+        session_name: ses.session_name,
+        start_time: ses.start_time,
+        end_time: ses.end_time,
         tables: DEFAULT_TABLES.map(tbl => {
           const matchingRes = localReservations.find(
-            r => r.table_id === tbl.id && r.reservation_time === tSlot
+            r => r.table_id === tbl.id && (r.session_id === ses.session_id || r.reservation_time === ses.start_time)
           );
           let tblStatus: TableAvailabilityStatus = 'AVAILABLE';
           if (matchingRes) {
@@ -395,6 +511,10 @@ export const api = {
     customer_phone: string;
     reservation_date: string;
     reservation_time: string;
+    session_id?: string;
+    start_time?: string;
+    end_time?: string;
+    session_name?: string;
     table_id: string;
     guest_count: number;
     notes?: string;
@@ -434,7 +554,7 @@ export const api = {
     const isOccupiedLocally = localReservations.some(
       r => r.table_id === payload.table_id &&
            r.reservation_date === payload.reservation_date &&
-           r.reservation_time === payload.reservation_time &&
+           (r.session_id === payload.session_id || r.reservation_time === payload.reservation_time) &&
            (r.status === 'PENDING' || r.status === 'CONFIRMED')
     );
     if (isOccupiedLocally) {
@@ -460,6 +580,10 @@ export const api = {
       customer_phone: payload.customer_phone,
       reservation_date: payload.reservation_date,
       reservation_time: payload.reservation_time,
+      session_id: payload.session_id,
+      session_name: payload.session_name,
+      start_time: payload.start_time,
+      end_time: payload.end_time,
       guest_count: payload.guest_count,
       notes: payload.notes || '',
       status: 'PENDING',
@@ -734,6 +858,10 @@ export const api = {
     customer_phone: string;
     reservation_date: string;
     reservation_time: string;
+    session_id?: string;
+    start_time?: string;
+    end_time?: string;
+    session_name?: string;
     table_id: string;
     guest_count: number;
     notes?: string;
@@ -761,6 +889,10 @@ export const api = {
       customer_phone: payload.customer_phone,
       reservation_date: payload.reservation_date,
       reservation_time: payload.reservation_time,
+      session_id: payload.session_id,
+      session_name: payload.session_name,
+      start_time: payload.start_time,
+      end_time: payload.end_time,
       guest_count: payload.guest_count,
       notes: payload.notes || '',
       status: payload.status || 'CONFIRMED',
@@ -1005,6 +1137,142 @@ export const api = {
     const filtered = users.filter(u => u.id !== id);
     saveLocalAuthUsers(filtered);
     return { success: true };
+  },
+
+  // SESSION MANAGEMENT (SUPER ADMIN & OWNER)
+  async getSessions(activeOnly = false): Promise<PlaySession[]> {
+    const res = await safeFetch('/api/admin/sessions', {
+      headers: this.getAuthHeaders()
+    });
+    if (res.ok && res.isJson && Array.isArray(res.data)) {
+      return activeOnly ? res.data.filter((s: PlaySession) => s.status === 'ACTIVE') : res.data;
+    }
+    const local = getLocalSessions();
+    return activeOnly ? local.filter(s => s.status === 'ACTIVE') : local;
+  },
+
+  async createSession(payload: {
+    session_name: string;
+    start_time: string;
+    end_time: string;
+    status?: SessionStatus;
+  }): Promise<PlaySession> {
+    const res = await safeFetch('/api/admin/sessions', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    if (res.ok && res.isJson && res.data?.session) {
+      const local = getLocalSessions();
+      local.push(res.data.session);
+      saveLocalSessions(local);
+      return res.data.session;
+    }
+    if (res.isJson && res.data?.error) {
+      throw new Error(res.data.error);
+    }
+    // Local fallback
+    const local = getLocalSessions();
+    const newSession: PlaySession = {
+      session_id: `ses-${Date.now().toString().slice(-5)}`,
+      session_name: payload.session_name,
+      start_time: payload.start_time,
+      end_time: payload.end_time,
+      status: payload.status || 'ACTIVE',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    local.push(newSession);
+    saveLocalSessions(local);
+    return newSession;
+  },
+
+  async updateSession(id: string, payload: Partial<PlaySession>): Promise<PlaySession> {
+    const res = await safeFetch(`/api/admin/sessions/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    if (res.ok && res.isJson && res.data?.session) {
+      const local = getLocalSessions();
+      const idx = local.findIndex(s => s.session_id === id);
+      if (idx !== -1) {
+        local[idx] = res.data.session;
+        saveLocalSessions(local);
+      }
+      return res.data.session;
+    }
+    if (res.isJson && res.data?.error) {
+      throw new Error(res.data.error);
+    }
+    // Local fallback
+    const local = getLocalSessions();
+    const idx = local.findIndex(s => s.session_id === id);
+    if (idx === -1) throw new Error('Sesi tidak ditemukan.');
+    local[idx] = {
+      ...local[idx],
+      ...payload,
+      updated_at: new Date().toISOString()
+    };
+    saveLocalSessions(local);
+    return local[idx];
+  },
+
+  async toggleSessionStatus(id: string, status: SessionStatus): Promise<PlaySession> {
+    const res = await safeFetch(`/api/admin/sessions/${id}/status`, {
+      method: 'PATCH',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+    if (res.ok && res.isJson && res.data?.session) {
+      const local = getLocalSessions();
+      const idx = local.findIndex(s => s.session_id === id);
+      if (idx !== -1) {
+        local[idx] = res.data.session;
+        saveLocalSessions(local);
+      }
+      return res.data.session;
+    }
+    if (res.isJson && res.data?.error) {
+      throw new Error(res.data.error);
+    }
+    // Local fallback
+    const local = getLocalSessions();
+    const idx = local.findIndex(s => s.session_id === id);
+    if (idx === -1) throw new Error('Sesi tidak ditemukan.');
+    local[idx].status = status;
+    local[idx].updated_at = new Date().toISOString();
+    saveLocalSessions(local);
+    return local[idx];
+  },
+
+  async deleteSession(id: string): Promise<{ success: boolean; deactivated?: boolean; message: string }> {
+    const res = await safeFetch(`/api/admin/sessions/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders()
+    });
+    if (res.ok && res.isJson && res.data) {
+      const local = getLocalSessions();
+      if (res.data.deactivated) {
+        const idx = local.findIndex(s => s.session_id === id);
+        if (idx !== -1) {
+          local[idx].status = 'INACTIVE';
+          saveLocalSessions(local);
+        }
+      } else {
+        const filtered = local.filter(s => s.session_id !== id);
+        saveLocalSessions(filtered);
+      }
+      return res.data;
+    }
+    if (res.isJson && res.data?.error) {
+      throw new Error(res.data.error);
+    }
+    // Local fallback
+    const local = getLocalSessions();
+    const filtered = local.filter(s => s.session_id !== id);
+    saveLocalSessions(filtered);
+    return { success: true, deactivated: false, message: 'Sesi berhasil dihapus.' };
   },
 
   async updateSettings(settings: Partial<BusinessSettings>): Promise<{ success: boolean; settings: BusinessSettings }> {

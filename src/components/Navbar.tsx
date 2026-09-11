@@ -65,12 +65,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <a href="#booking-form-card" className="hover:text-amber-400 transition-colors">
               Formulir Booking
             </a>
-            <a href="#tables-section" className="hover:text-amber-400 transition-colors">
-              Pilihan Meja
-            </a>
-            <a href="#guide-section" className="hover:text-amber-400 transition-colors">
-              Cara Booking
-            </a>
             <a href="#venue-section" className="hover:text-amber-400 transition-colors">
               Lokasi & Kontak
             </a>
@@ -142,20 +136,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="block py-2 text-sm font-medium text-slate-200 hover:text-amber-400"
           >
             Formulir Booking
-          </a>
-          <a
-            href="#tables-section"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 text-sm font-medium text-slate-200 hover:text-amber-400"
-          >
-            Pilihan Meja
-          </a>
-          <a
-            href="#guide-section"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 text-sm font-medium text-slate-200 hover:text-amber-400"
-          >
-            Cara Booking
           </a>
           <a
             href="#venue-section"

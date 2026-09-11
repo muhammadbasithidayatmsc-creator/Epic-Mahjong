@@ -3,10 +3,7 @@ import { MessageCircle } from 'lucide-react';
 import { api } from './lib/api';
 import { MahjongTable, BusinessSettings, UserProfile, Reservation } from './types';
 import { Navbar } from './components/Navbar';
-import { Hero } from './components/Hero';
 import { BookingSection } from './components/BookingSection';
-import { TableShowcase } from './components/TableShowcase';
-import { HowToBook } from './components/HowToBook';
 import { VenueInfo } from './components/VenueInfo';
 import { Footer } from './components/Footer';
 import { BookingSuccessModal } from './components/BookingSuccessModal';
@@ -282,23 +279,7 @@ export default function App() {
           onErrorToast={(msg) => showToast(msg, 'error')}
         />
 
-        {/* 2. 5 Tables Showcase with Room Features */}
-        <TableShowcase
-          tables={tables}
-          onSelectForBooking={(tblId) => {
-            setSelectedTableId(tblId);
-            const el = document.getElementById('schedule-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }}
-        />
-
-        {/* 3. Luxury Experience & Venue Highlight */}
-        <Hero settings={settings} />
-
-        {/* 4. How to Book Guide */}
-        <HowToBook />
-
-        {/* 5. Venue Information & Location (Alam Sutera) */}
+        {/* 2. Venue Information & Location (Alam Sutera) */}
         <VenueInfo settings={settings} />
       </main>
 

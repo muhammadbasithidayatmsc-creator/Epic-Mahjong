@@ -42,16 +42,10 @@ export const Footer: React.FC<FooterProps> = ({ settings, onOpenAdminLogin }) =>
             <div className="text-slate-200 font-semibold uppercase tracking-wider text-[11px]">Navigasi</div>
             <ul className="space-y-1.5">
               <li>
-                <a href="#booking-section" className="hover:text-amber-400 transition-colors">Reservasi Meja</a>
+                <a href="#schedule-section" className="hover:text-amber-400 transition-colors">Jadwal Meja Hari Ini</a>
               </li>
               <li>
-                <a href="#tables-section" className="hover:text-amber-400 transition-colors">5 Pilihan Meja</a>
-              </li>
-              <li>
-                <a href="#schedule-section" className="hover:text-amber-400 transition-colors">Jadwal Meja</a>
-              </li>
-              <li>
-                <a href="#guide-section" className="hover:text-amber-400 transition-colors">Panduan Booking</a>
+                <a href="#booking-form-card" className="hover:text-amber-400 transition-colors">Formulir Booking</a>
               </li>
               <li>
                 <a href="#venue-section" className="hover:text-amber-400 transition-colors">Lokasi & Kontak</a>

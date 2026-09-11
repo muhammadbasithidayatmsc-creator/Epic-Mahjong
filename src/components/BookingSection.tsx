@@ -15,8 +15,6 @@ import {
   AlertCircle, 
   ChevronRight, 
   CalendarDays,
-  Grid,
-  Columns,
   Lock,
   X,
   MessageCircle,
@@ -163,9 +161,6 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [selectedTime, setSelectedTime] = useState<string>('14:00');
   const [selectedTable, setSelectedTable] = useState<TableWithAvailability | null>(null);
-
-  // View mode toggle: 'timeline' (5 table cards) vs 'matrix' (side-by-side grid)
-  const [viewMode, setViewMode] = useState<'timeline' | 'matrix'>('timeline');
 
   // Customer input fields
   const [customerName, setCustomerName] = useState<string>('');
@@ -570,7 +565,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             </div>
           </div>
 
-          {/* Status Legend Bar & View Toggle */}
+          {/* Status Legend Bar */}
           <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-3 sm:gap-4 flex-wrap font-semibold">
               <div className="flex items-center gap-1.5 text-emerald-400">
@@ -587,44 +582,21 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
               </div>
             </div>
 
-            {/* View Mode Toggle (Timeline vs Matrix) */}
-            <div className="flex items-center gap-1 bg-[#161f30] p-1 rounded-xl border border-slate-700/80 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setViewMode('timeline')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  viewMode === 'timeline'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Columns className="w-3.5 h-3.5" />
-                <span>5 Meja Timeline</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('matrix')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  viewMode === 'matrix'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Grid className="w-3.5 h-3.5" />
-                <span>Tabel Matriks</span>
-              </button>
+            <div className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Tabel Matriks Ketersediaan 5 Meja</span>
             </div>
           </div>
         </div>
 
         {/* ========================================================================= */}
-        {/* 3. JADWAL 5 MEJA DENGAN TIMELINE JAM (REALTIME DATABASE)                  */}
+        {/* 3. TABEL MATRIKS JADWAL 5 MEJA (REALTIME DATABASE)                        */}
         {/* ========================================================================= */}
         <div className="mb-10">
           
           {/* Active selection helper notice */}
           {selectedTable ? (
-            <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs sm:text-sm flex items-center justify-between flex-wrap gap-2 animate-in fade-in">
+            <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs sm:text-sm flex items-center justify-between flex-wrap gap-2 animate-in fade-in shadow-md">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>
@@ -647,231 +619,131 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
           ) : (
             <div className="mb-4 text-xs text-slate-400 flex items-center gap-1.5">
               <Info className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Klik pada salah satu tombol hijau (<strong className="text-emerald-400 font-bold">AVAILABLE</strong>) pada jam yang Anda inginkan untuk memulai reservasi.</span>
+              <span>Klik pada salah satu kotak hijau (<strong className="text-emerald-400 font-bold">AVAILABLE</strong>) di Tabel Matriks untuk langsung memesan slot.</span>
             </div>
           )}
 
-          {/* VIEW MODE 1: 5 TABLE CARDS WITH FULL TIMELINE (RECOMMENDED / DEFAULT) */}
-          {viewMode === 'timeline' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5">
-              {tables.map(table => {
-                const isTableSelected = selectedTable?.id === table.id;
-                const priceText = getTablePrice(table.id);
-                const capacityText = getTableCapacityLabel(table.capacity, table.id);
-
-                return (
-                  <div
-                    key={table.id}
-                    id={`table-schedule-card-${table.id}`}
-                    className={`rounded-2xl border flex flex-col justify-between transition-all duration-200 overflow-hidden ${
-                      isTableSelected
-                        ? 'bg-[#152033] border-amber-400/80 shadow-2xl shadow-amber-500/15 ring-2 ring-amber-400/60'
-                        : 'bg-[#111724] border-slate-800 hover:border-slate-700 shadow-lg'
-                    }`}
-                  >
-                    {/* Card Table Header */}
-                    <div className="p-4 bg-[#141b2a] border-b border-slate-800">
-                      <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <h3 className="font-serif font-black text-lg text-slate-100 tracking-tight">
-                          {table.name}
-                        </h3>
-                        {table.id === 'tbl-05' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                            VIP SUITE
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs text-slate-300 mb-1 font-medium">
-                        <div className="flex items-center gap-1 text-slate-400">
-                          <Users className="w-3.5 h-3.5 text-amber-400" />
-                          <span>{capacityText}</span>
-                        </div>
-                        <span className="font-mono text-amber-400 text-[11px] font-bold">
-                          {priceText.split(' ')[1]} / 2 Jam
-                        </span>
-                      </div>
-
-                      <p className="text-[11px] text-slate-400 line-clamp-1">
-                        {table.description || 'Meja Otomatis Elektrik Mahjong'}
-                      </p>
-                    </div>
-
-                    {/* Timeline Slot Buttons */}
-                    <div className="p-3 space-y-2 flex-1">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pb-1">
-                        Slot Jam Sesi (2 Jam):
-                      </div>
-
-                      {timeSlots.map(time => {
-                        const status = getSlotStatus(table.id, time);
-                        const isSlotSelected = isTableSelected && selectedTime === time;
-                        const timeRangeText = formatSlotTime(time);
-
-                        if (status === 'AVAILABLE') {
-                          return (
-                            <button
-                              key={time}
-                              type="button"
-                              onClick={() => handleSelectSlot(table, time)}
-                              className={`w-full py-2 px-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                                isSlotSelected
-                                  ? 'bg-amber-400 text-slate-950 border-amber-300 font-extrabold shadow-md ring-2 ring-amber-300/60'
-                                  : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border-emerald-500/30 hover:border-emerald-400 group'
-                              }`}
-                              title={`Pilih ${table.name} jam ${timeRangeText} WIB`}
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <Clock className={`w-3 h-3 ${isSlotSelected ? 'text-slate-950' : 'text-emerald-400 group-hover:text-slate-950'}`} />
-                                <span className="font-mono text-xs font-bold">{timeRangeText}</span>
-                              </div>
-
-                              <div className="flex items-center gap-1 text-[10px] font-black tracking-wider">
-                                {isSlotSelected ? (
-                                  <>
-                                    <Check className="w-3 h-3" />
-                                    <span>TERPILIH</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 group-hover:bg-slate-950" />
-                                    <span>AVAILABLE</span>
-                                  </>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        }
-
-                        if (status === 'PENDING') {
-                          return (
-                            <div
-                              key={time}
-                              onClick={() => onErrorToast(`Slot ${timeRangeText} WIB di ${table.name} sedang dalam proses konfirmasi.`)}
-                              className="w-full py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300/80 text-left flex items-center justify-between cursor-not-allowed opacity-80"
-                              title="Menunggu konfirmasi admin"
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-3 h-3 text-amber-400/80" />
-                                <span className="font-mono text-xs font-medium">{timeRangeText}</span>
-                              </div>
-                              <span className="text-[10px] font-bold text-amber-400 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                                PENDING
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        // BOOKED (Confirmed)
-                        return (
-                          <div
-                            key={time}
-                            onClick={() => onErrorToast(`Slot ${timeRangeText} WIB di ${table.name} sudah terisi penuh (BOOKED).`)}
-                            className="w-full py-2 px-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300/70 text-left flex items-center justify-between cursor-not-allowed opacity-75"
-                            title="Slot sudah terisi penuh"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <Lock className="w-3 h-3 text-rose-400/70" />
-                              <span className="font-mono text-xs line-through text-slate-400">{timeRangeText}</span>
-                            </div>
-                            <span className="text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                              BOOKED
+          {/* TABEL MATRIKS 5 MEJA */}
+          <div className="bg-[#111724] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm min-w-[720px]">
+                <thead className="bg-[#172030] text-xs uppercase tracking-wider text-slate-300 border-b border-slate-800">
+                  <tr>
+                    <th className="py-4 px-5 font-bold text-amber-400 flex items-center gap-1.5 whitespace-nowrap bg-[#172030]">
+                      <Clock className="w-4 h-4 text-amber-400" />
+                      <span>Jam Sesi (2 Jam)</span>
+                    </th>
+                    {tables.map(table => (
+                      <th key={table.id} className="py-4 px-3 font-bold text-center border-l border-slate-800/80">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className="text-slate-100 font-serif text-sm tracking-wide">{table.name}</span>
+                          {table.id === 'tbl-05' && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              VIP
                             </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Table Card Bottom Footer */}
-                    <div className="p-3 bg-[#0e131d] border-t border-slate-800 text-center">
-                      <span className="text-[11px] text-slate-400">
-                        {table.features?.slice(0, 2).join(' • ') || 'Meja Otomatis Elektrik'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* VIEW MODE 2: TABLE MATRIX VIEW (SIDE-BY-SIDE GRID) */
-            <div className="bg-[#111724] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-[#172030] text-xs uppercase tracking-wider text-slate-300 border-b border-slate-800">
-                    <tr>
-                      <th className="py-4 px-5 font-semibold text-amber-400 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Jam Sesi</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] font-medium text-slate-400 mt-0.5 flex items-center justify-center gap-1">
+                          <Users className="w-3 h-3 text-amber-400" />
+                          <span>{getTableCapacityLabel(table.capacity, table.id)}</span>
+                        </div>
+                        <div className="text-[10px] font-mono text-amber-400 font-bold mt-0.5">
+                          {getTablePrice(table.id).split(' ')[1]} / 2 Jam
+                        </div>
                       </th>
-                      {tables.map(table => (
-                        <th key={table.id} className="py-4 px-4 font-bold text-center">
-                          <div className="text-slate-100">{table.name}</div>
-                          <div className="text-[10px] font-normal text-slate-400">
-                            {getTableCapacityLabel(table.capacity, table.id)}
-                          </div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80">
-                    {timeSlots.map(time => {
-                      const timeRangeText = formatSlotTime(time);
-                      return (
-                        <tr key={time} className="hover:bg-[#141b2b] transition-colors">
-                          <td className="py-3.5 px-5 font-mono font-bold text-slate-200 whitespace-nowrap">
-                            {timeRangeText} WIB
-                          </td>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/80">
+                  {timeSlots.map(time => {
+                    const timeRangeText = formatSlotTime(time);
+                    return (
+                      <tr key={time} className="hover:bg-[#141b2b] transition-colors">
+                        <td className="py-3.5 px-5 font-mono font-bold text-slate-200 whitespace-nowrap bg-[#111724]/70">
+                          {timeRangeText} WIB
+                        </td>
 
-                          {tables.map(table => {
-                            const status = getSlotStatus(table.id, time);
-                            const isSelected = selectedTable?.id === table.id && selectedTime === time;
+                        {tables.map(table => {
+                          const status = getSlotStatus(table.id, time);
+                          const isSelected = selectedTable?.id === table.id && selectedTime === time;
 
-                            if (status === 'AVAILABLE') {
-                              return (
-                                <td key={table.id} className="py-3 px-3 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectSlot(table, time)}
-                                    className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                      isSelected
-                                        ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
-                                        : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30'
-                                    }`}
-                                  >
-                                    {isSelected ? '✓ TERPILIH' : 'AVAILABLE'}
-                                  </button>
-                                </td>
-                              );
-                            }
-
-                            if (status === 'PENDING') {
-                              return (
-                                <td key={table.id} className="py-3 px-3 text-center">
-                                  <span className="inline-block w-full py-1.5 px-3 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/25 cursor-not-allowed">
-                                    PENDING
-                                  </span>
-                                </td>
-                              );
-                            }
-
+                          if (status === 'AVAILABLE') {
                             return (
-                              <td key={table.id} className="py-3 px-3 text-center">
-                                <span className="inline-block w-full py-1.5 px-3 rounded-lg text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 cursor-not-allowed">
-                                  BOOKED
-                                </span>
+                              <td key={table.id} className="py-2.5 px-2.5 text-center border-l border-slate-800/60">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectSlot(table, time)}
+                                  className={`w-full py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                    isSelected
+                                      ? 'bg-amber-400 text-slate-950 font-black shadow-lg ring-2 ring-amber-300'
+                                      : 'bg-emerald-500/15 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/40 hover:border-emerald-400 shadow-sm'
+                                  }`}
+                                  title={`Pilih ${table.name} pukul ${timeRangeText} WIB`}
+                                >
+                                  {isSelected ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                      <span>TERPILIH</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                      <span>AVAILABLE</span>
+                                    </>
+                                  )}
+                                </button>
                               </td>
                             );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          }
+
+                          if (status === 'PENDING') {
+                            return (
+                              <td key={table.id} className="py-2.5 px-2.5 text-center border-l border-slate-800/60">
+                                <button
+                                  type="button"
+                                  onClick={() => onErrorToast(`Slot ${timeRangeText} WIB di ${table.name} sedang dalam proses konfirmasi.`)}
+                                  className="w-full py-2 px-2.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-400/90 border border-amber-500/25 cursor-not-allowed opacity-80 flex items-center justify-center gap-1"
+                                  title="Menunggu konfirmasi admin"
+                                >
+                                  <Clock className="w-3 h-3 text-amber-400/70" />
+                                  <span>PENDING</span>
+                                </button>
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={table.id} className="py-2.5 px-2.5 text-center border-l border-slate-800/60">
+                              <button
+                                type="button"
+                                onClick={() => onErrorToast(`Slot ${timeRangeText} WIB di ${table.name} sudah terisi penuh (BOOKED).`)}
+                                className="w-full py-2 px-2.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-400/80 border border-rose-500/20 cursor-not-allowed opacity-75 flex items-center justify-center gap-1"
+                                title="Slot sudah terisi penuh"
+                              >
+                                <Lock className="w-3 h-3 text-rose-400/60" />
+                                <span className="line-through text-slate-400 font-mono text-[11px]">{time}</span>
+                                <span>BOOKED</span>
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
+
+            {/* Table Footer Guide */}
+            <div className="p-3.5 bg-[#0e131d] border-t border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs text-slate-400 px-5">
+              <span className="text-[11px] sm:text-xs text-slate-400">
+                * Geser tabel ke kanan/kiri jika melihat melalui layar HP
+              </span>
+              <span className="text-amber-400 font-semibold text-[11px] sm:text-xs">
+                Klik tombol hijau AVAILABLE untuk booking langsung
+              </span>
+            </div>
+          </div>
 
         </div>
 

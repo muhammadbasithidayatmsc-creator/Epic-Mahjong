@@ -555,6 +555,47 @@ export const db = {
     };
   },
 
+  // BATCH SET SESSIONS (SUPER ADMIN & OWNER)
+  batchSetSessions(newSessions: Array<{ session_name: string; start_time: string; end_time: string; status?: SessionStatus }>): PlaySession[] {
+    if (!memoryDb.sessions) memoryDb.sessions = [...defaultSessions];
+    if (!Array.isArray(newSessions) || newSessions.length === 0) {
+      throw new Error('Daftar sesi tidak boleh kosong.');
+    }
+
+    const now = new Date().toISOString();
+
+    // Preserve previous sessions that have reservations by marking them INACTIVE so reservation history remains consistent
+    for (const oldS of memoryDb.sessions) {
+      const hasRes = memoryDb.reservations.some(r => r.session_id === oldS.session_id);
+      if (hasRes) {
+        oldS.status = 'INACTIVE';
+        oldS.updated_at = now;
+      }
+    }
+
+    // Retain only sessions that have historical reservations
+    memoryDb.sessions = memoryDb.sessions.filter(oldS => 
+      memoryDb.reservations.some(r => r.session_id === oldS.session_id)
+    );
+
+    // Append new sessions
+    newSessions.forEach((s, idx) => {
+      const sesId = `ses-${Date.now()}-${idx + 1}`;
+      memoryDb.sessions.push({
+        session_id: sesId,
+        session_name: s.session_name.trim() || `Sesi ${idx + 1}`,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        status: s.status || 'ACTIVE',
+        created_at: now,
+        updated_at: now
+      });
+    });
+
+    saveDatabase(memoryDb);
+    return this.getSessions(false);
+  },
+
   // ANTI-DOUBLE BOOKING VALIDATION WITH SESSION & TIME OVERLAP CHECK
   isSlotOccupied(
     tableId: string,
@@ -733,7 +774,7 @@ export const db = {
         session_id: sessionId
       })
     ) {
-      throw new Error('Maaf, meja ini baru saja dipesan oleh customer lain untuk sesi/jam tersebut. Silakan pilih meja atau sesi lainnya.');
+      throw new Error('Maaf, slot ini baru saja dipesan. Silakan pilih jam atau meja lainnya.');
     }
 
     const table = this.getTableById(data.table_id);

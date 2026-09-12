@@ -96,6 +96,44 @@
   ],
   "reservations": [
     {
+      "id": "res-1789137102198-159",
+      "booking_code": "EM-20260911-9213",
+      "customer_name": "Agus Pratama",
+      "customer_phone": "081122334455",
+      "reservation_date": "2026-09-11",
+      "reservation_time": "18:00",
+      "session_id": "ses-05",
+      "session_name": "Sesi 5",
+      "start_time": "18:00",
+      "end_time": "20:00",
+      "table_id": "tbl-01",
+      "table_name": "TABLE 01",
+      "guest_count": 4,
+      "notes": "",
+      "status": "PENDING",
+      "created_at": "2026-09-11T14:31:42.198Z",
+      "updated_at": "2026-09-11T14:31:42.198Z"
+    },
+    {
+      "id": "res-1789137087901-667",
+      "booking_code": "EM-20260911-3954",
+      "customer_name": "Budi Santoso",
+      "customer_phone": "081234567890",
+      "reservation_date": "2026-09-11",
+      "reservation_time": "16:00",
+      "session_id": "ses-04",
+      "session_name": "Sesi 4",
+      "start_time": "16:00",
+      "end_time": "18:00",
+      "table_id": "tbl-01",
+      "table_name": "TABLE 01",
+      "guest_count": 4,
+      "notes": "Pertama kali main",
+      "status": "PENDING",
+      "created_at": "2026-09-11T14:31:27.901Z",
+      "updated_at": "2026-09-11T14:31:27.901Z"
+    },
+    {
       "id": "res-1788793888409-191",
       "booking_code": "EM-20260908-9429",
       "customer_name": "Budi Santoso",
@@ -108,7 +146,11 @@
       "notes": "Mohon info tarif bermain",
       "status": "PENDING",
       "created_at": "2026-09-07T15:11:28.409Z",
-      "updated_at": "2026-09-07T15:11:28.409Z"
+      "updated_at": "2026-09-07T15:11:28.409Z",
+      "session_id": "ses-04",
+      "session_name": "Sesi 4",
+      "start_time": "16:00",
+      "end_time": "18:00"
     },
     {
       "id": "res-1788792376675-348",
@@ -123,7 +165,11 @@
       "notes": "Testing reservation WA",
       "status": "PENDING",
       "created_at": "2026-09-07T14:46:16.675Z",
-      "updated_at": "2026-09-07T14:46:16.675Z"
+      "updated_at": "2026-09-07T14:46:16.675Z",
+      "session_id": "ses-05",
+      "session_name": "Sesi 5",
+      "start_time": "18:00",
+      "end_time": "20:00"
     },
     {
       "id": "res-demo-01",
@@ -138,7 +184,11 @@
       "notes": "Main 2 jam santai bersama rekan",
       "status": "CONFIRMED",
       "created_at": "2026-09-07T11:15:31.627Z",
-      "updated_at": "2026-09-07T14:15:31.627Z"
+      "updated_at": "2026-09-07T14:15:31.627Z",
+      "session_id": "ses-03",
+      "session_name": "Sesi 3",
+      "start_time": "14:00",
+      "end_time": "16:00"
     },
     {
       "id": "res-demo-02",
@@ -153,7 +203,11 @@
       "notes": "Menunggu transfer DP",
       "status": "PENDING",
       "created_at": "2026-09-07T13:45:31.627Z",
-      "updated_at": "2026-09-07T14:15:31.627Z"
+      "updated_at": "2026-09-07T14:15:31.627Z",
+      "session_id": "ses-03",
+      "session_name": "Sesi 3",
+      "start_time": "14:00",
+      "end_time": "16:00"
     }
   ],
   "settings": {
@@ -175,5 +229,79 @@
       "00:00"
     ],
     "updated_at": "2026-09-07T14:15:31.626Z"
-  }
+  },
+  "sessions": [
+    {
+      "session_id": "ses-01",
+      "session_name": "Sesi 1",
+      "start_time": "10:00",
+      "end_time": "12:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    },
+    {
+      "session_id": "ses-02",
+      "session_name": "Sesi 2",
+      "start_time": "12:00",
+      "end_time": "14:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    },
+    {
+      "session_id": "ses-03",
+      "session_name": "Sesi 3",
+      "start_time": "14:00",
+      "end_time": "16:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    },
+    {
+      "session_id": "ses-04",
+      "session_name": "Sesi 4",
+      "start_time": "16:00",
+      "end_time": "18:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    },
+    {
+      "session_id": "ses-05",
+      "session_name": "Sesi 5",
+      "start_time": "18:00",
+      "end_time": "20:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    },
+    {
+      "session_id": "ses-06",
+      "session_name": "Sesi 6",
+      "start_time": "20:00",
+      "end_time": "22:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    },
+    {
+      "session_id": "ses-07",
+      "session_name": "Sesi 7",
+      "start_time": "22:00",
+      "end_time": "00:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    },
+    {
+      "session_id": "ses-08",
+      "session_name": "Sesi 8",
+      "start_time": "00:00",
+      "end_time": "02:00",
+      "status": "ACTIVE",
+      "created_at": "2026-09-11T14:30:15.070Z",
+      "updated_at": "2026-09-11T14:30:15.070Z"
+    }
+  ]
 }

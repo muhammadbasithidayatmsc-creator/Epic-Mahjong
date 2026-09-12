@@ -112,25 +112,26 @@ function formatWhatsAppUrl(adminPhone: string, reservation: {
   }
 
   const formattedDate = formatIndoDate(reservation.reservation_date);
-  const timeDisplay = reservation.session_name 
-    ? `${reservation.session_name} (${reservation.start_time || reservation.reservation_time} - ${reservation.end_time || ''} WIB)`
+  const sessionTitle = reservation.session_name || 'Sesi Bermain';
+  const jamDisplay = (reservation.start_time && reservation.end_time)
+    ? `${reservation.start_time} – ${reservation.end_time}`
     : formatSlotTime(reservation.reservation_time);
 
-  const message = 
-`Halo EPIC MAHJONG,
+  const catatanText = (reservation.notes && reservation.notes.trim()) ? reservation.notes.trim() : '-';
 
-Saya ingin melakukan reservasi meja.
+  let message = 
+`EPIC MAHJONG — BOOKING REQUEST
 
 Booking ID: ${reservation.booking_code}
 Nama: ${reservation.customer_name}
 No. WhatsApp: ${reservation.customer_phone}
 Tanggal: ${formattedDate}
-Jam / Sesi: ${timeDisplay}
-Meja: ${reservation.table_name}
-Jumlah orang: ${reservation.guest_count}
-Catatan: ${reservation.notes && reservation.notes.trim() ? reservation.notes.trim() : '-'}
+Table: ${reservation.table_name}
+Jam Bermain: ${jamDisplay}
+Jumlah Pemain: ${reservation.guest_count} Orang
+Catatan: ${catatanText}
 
-Mohon informasi terkait konfirmasi reservasi.
+Mohon informasi untuk proses konfirmasi dan pembayaran.
 
 Terima kasih.`;
 
@@ -617,6 +618,20 @@ app.delete('/api/admin/sessions/:id', authenticateToken, requireRole(['SUPER_ADM
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Gagal menghapus sesi.' });
+  }
+});
+
+// Batch Set Sessions (Super Admin & Owner)
+app.post('/api/admin/sessions/batch', authenticateToken, requireRole(['SUPER_ADMIN', 'OWNER']), (req, res) => {
+  try {
+    const { sessions } = req.body;
+    if (!Array.isArray(sessions) || sessions.length === 0) {
+      return res.status(400).json({ error: 'Data sesi batch tidak boleh kosong.' });
+    }
+    const updatedSessions = db.batchSetSessions(sessions);
+    res.status(200).json({ success: true, message: 'Daftar sesi berhasil diperbarui secara batch.', sessions: updatedSessions });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal menyimpan konfigurasi sesi batch.' });
   }
 });
 

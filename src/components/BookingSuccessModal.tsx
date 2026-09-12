@@ -22,26 +22,25 @@ export const BookingSuccessModal: React.FC<BookingSuccessModalProps> = ({
   const adminPhoneClean = '6285181959275';
 
   const formattedDate = formatIndoDate(reservation.reservation_date);
-  const formattedTime = formatSlotTime(reservation.reservation_time);
-  const sessionDisplay = reservation.session_name 
-    ? `${reservation.session_name} (${formattedTime} WIB)`
-    : `${formattedTime} WIB`;
+  const sessionName = reservation.session_name || 'Sesi Bermain';
+  const startTime = reservation.start_time || reservation.reservation_time;
+  const endTime = reservation.end_time || '';
+  const jamText = endTime ? `${startTime} – ${endTime}` : formatSlotTime(reservation.reservation_time);
+  const catatanText = (reservation.notes && reservation.notes.trim()) ? reservation.notes.trim() : '-';
 
-  const fullMessage = 
-`Halo EPIC MAHJONG,
-
-Saya ingin melakukan reservasi meja.
+  let fullMessage = 
+`EPIC MAHJONG — BOOKING REQUEST
 
 Booking ID: ${reservation.booking_code}
 Nama: ${reservation.customer_name}
 No. WhatsApp: ${reservation.customer_phone}
 Tanggal: ${formattedDate}
-Jam Sesi: ${sessionDisplay}
-Meja: ${reservation.table_name || 'TABLE 01'}
-Jumlah orang: ${reservation.guest_count}
-Catatan: ${reservation.notes && reservation.notes.trim() ? reservation.notes.trim() : '-'}
+Table: ${reservation.table_name || 'TABLE 01'}
+Jam Bermain: ${jamText}
+Jumlah Pemain: ${reservation.guest_count} Orang
+Catatan: ${catatanText}
 
-Mohon informasi terkait pembayaran dan konfirmasi reservasi.
+Mohon informasi untuk proses konfirmasi dan pembayaran.
 
 Terima kasih.`;
 
@@ -128,7 +127,7 @@ Terima kasih.`;
             <div className="text-xs text-slate-300 mt-1 flex items-center gap-2 flex-wrap font-medium">
               <span>{formattedDate}</span>
               <span>•</span>
-              <span className="text-amber-400 font-semibold">{formattedTime} WIB</span>
+              <span className="text-amber-400 font-semibold">{jamText} WIB</span>
               <span>•</span>
               <span>{reservation.guest_count} Orang</span>
             </div>
@@ -157,9 +156,13 @@ Terima kasih.`;
           </div>
 
           {/* Full Details summary */}
-          <div className="bg-[#141c2c]/80 rounded-xl p-3.5 border border-slate-800 text-xs space-y-2">
+          <div className="bg-[#141c2c]/80 rounded-xl p-4 border border-slate-800 text-xs space-y-2">
             <div className="flex justify-between py-1 border-b border-slate-800">
-              <span className="text-slate-400">Nama Customer:</span>
+              <span className="text-slate-400">Booking ID:</span>
+              <span className="text-amber-400 font-mono font-bold">{reservation.booking_code}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-slate-800">
+              <span className="text-slate-400">Nama:</span>
               <span className="text-slate-200 font-semibold">{reservation.customer_name}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-800">
@@ -171,12 +174,26 @@ Terima kasih.`;
               <span className="text-slate-200 font-semibold">{formattedDate}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-800">
-              <span className="text-slate-400">Jam Sesi:</span>
-              <span className="text-amber-400 font-semibold">{sessionDisplay}</span>
+              <span className="text-slate-400">TABLE:</span>
+              <span className="text-emerald-400 font-bold">{reservation.table_name || 'TABLE 01'}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-800">
-              <span className="text-slate-400">Meja:</span>
-              <span className="text-emerald-400 font-semibold">{reservation.table_name || 'TABLE'}</span>
+              <span className="text-slate-400">Sesi:</span>
+              <span className="text-amber-300 font-semibold">{sessionName}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-slate-800">
+              <span className="text-slate-400">Jam Mulai:</span>
+              <span className="text-slate-200 font-mono">{startTime} WIB</span>
+            </div>
+            {endTime && (
+              <div className="flex justify-between py-1 border-b border-slate-800">
+                <span className="text-slate-400">Jam Selesai:</span>
+                <span className="text-slate-200 font-mono">{endTime} WIB</span>
+              </div>
+            )}
+            <div className="flex justify-between py-1 border-b border-slate-800">
+              <span className="text-slate-400">Jam:</span>
+              <span className="text-amber-400 font-bold font-mono">{jamText} WIB</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-800">
               <span className="text-slate-400">Jumlah Orang:</span>
@@ -190,7 +207,7 @@ Terima kasih.`;
             )}
             <div className="flex justify-between pt-1">
               <span className="text-slate-400">Status:</span>
-              <span className="text-amber-400 font-bold">MENUNGGU KONFIRMASI</span>
+              <span className="text-amber-400 font-bold">{reservation.status || 'PENDING'}</span>
             </div>
           </div>
 

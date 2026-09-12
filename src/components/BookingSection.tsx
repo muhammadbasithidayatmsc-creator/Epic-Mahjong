@@ -105,6 +105,20 @@ function getTableCapacityLabel(capacity: number, tableId: string): string {
   return `${capacity} Players`;
 }
 
+function calculateDurationLabel(start: string, end: string): string {
+  if (!start || !end) return '2 Jam';
+  const [sH, sM] = start.split(':').map(Number);
+  const [eH, eM] = end.split(':').map(Number);
+  let totalMin = (eH * 60 + (eM || 0)) - (sH * 60 + (sM || 0));
+  if (totalMin <= 0) totalMin += 24 * 60;
+  const hours = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  if (mins === 0) {
+    return `${hours} Jam Bermain`;
+  }
+  return `${hours} Jam ${mins} Menit`;
+}
+
 export const BookingSection: React.FC<BookingSectionProps> = ({
   tables: tablesProp,
   settings,
@@ -247,6 +261,22 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     }
   }, [tablesProp]);
 
+  // Auto-initialize selectedTable to first active table if none is selected
+  useEffect(() => {
+    if (!selectedTable && tables.length > 0) {
+      if (preselectedTableId) {
+        const match = tables.find(t => t.id === preselectedTableId);
+        if (match) {
+          setSelectedTable(match);
+          setGuestCount(match.capacity || 4);
+          return;
+        }
+      }
+      setSelectedTable(tables[0]);
+      setGuestCount(tables[0].capacity || 4);
+    }
+  }, [tables, preselectedTableId, selectedTable]);
+
   // Handle preselected table ID from props
   useEffect(() => {
     if (preselectedTableId && tables.length > 0) {
@@ -267,7 +297,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     try {
       const [schedData, availData] = await Promise.all([
         api.getSchedule(selectedDate),
-        api.getAvailability(selectedDate, selectedTime)
+        api.getAvailability(selectedDate, selectedSession ? selectedSession.start_time : selectedTime)
       ]);
 
       if (Array.isArray(schedData)) {
@@ -277,16 +307,25 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       if (Array.isArray(availData) && availData.length > 0) {
         setTables(availData);
 
-        // If user already had a table selected, verify it hasn't become booked
+        // Keep current selected table active
         if (selectedTable) {
           const fresh = availData.find(t => t.id === selectedTable.id);
           if (fresh) {
-            if (fresh.status !== 'AVAILABLE') {
-              // Table became booked during session
-              setSelectedTable(null);
+            setSelectedTable(fresh);
+          }
+        }
+
+        // Verify if selectedSession is still available
+        if (selectedTable && selectedSession && Array.isArray(schedData)) {
+          const slot = schedData.find(s => 
+            (s.session_id && s.session_id === selectedSession.session_id) || 
+            s.time === selectedSession.start_time
+          );
+          if (slot) {
+            const tbl = slot.tables.find(t => t.table_id === selectedTable.id);
+            if (tbl && tbl.status !== 'AVAILABLE') {
+              // Slot specifically became booked by another customer
               setSelectedSession(null);
-            } else {
-              setSelectedTable(fresh);
             }
           }
         }
@@ -313,7 +352,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       fetchScheduleAndAvailability(true);
     }, 18000);
     return () => clearInterval(timer);
-  }, [selectedDate, selectedTime, selectedTable]);
+  }, [selectedDate, selectedTime, selectedTable, selectedSession]);
 
   // Check status of a specific table at a specific session from daySchedule
   const getSlotStatus = (tableId: string, session: PlaySession): 'AVAILABLE' | 'PENDING' | 'BOOKED' => {
@@ -327,7 +366,55 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     return tbl?.status || 'AVAILABLE';
   };
 
-  // Handle clicking a specific time slot for a table
+  // Handle switching table tab
+  const handleSelectTableOnly = (table: TableWithAvailability) => {
+    setSelectedTable(table);
+    setGuestCount(table.capacity || 4);
+    // If previous selectedSession is booked on this table, clear so user selects an available one
+    if (selectedSession) {
+      const status = getSlotStatus(table.id, selectedSession);
+      if (status !== 'AVAILABLE') {
+        setSelectedSession(null);
+      }
+    }
+  };
+
+  // Handle clicking a specific session card directly
+  const handleSelectSessionOnly = (session: PlaySession) => {
+    const tableToUse = selectedTable || (tables.length > 0 ? tables[0] : null);
+    if (!tableToUse) return;
+
+    const status = getSlotStatus(tableToUse.id, session);
+    const sessionLabel = `${session.session_name} (${session.start_time}–${session.end_time} WIB)`;
+
+    if (status === 'BOOKED') {
+      onErrorToast(`Slot ${sessionLabel} untuk ${tableToUse.name} sudah terisi (BOOKED). Silakan pilih sesi hijau (AVAILABLE) lainnya.`);
+      return;
+    }
+    if (status === 'PENDING') {
+      onErrorToast(`Slot ${sessionLabel} untuk ${tableToUse.name} sedang dalam proses konfirmasi (PENDING). Silakan pilih sesi yang berstatus AVAILABLE.`);
+      return;
+    }
+
+    if (!selectedTable) {
+      setSelectedTable(tableToUse);
+    }
+    setSelectedSession(session);
+    setSelectedTime(session.start_time);
+    setConflictError(null);
+
+    // Smooth scroll down to customer form & focus on customer name
+    setTimeout(() => {
+      if (formContainerRef.current) {
+        formContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => {
+          customerNameInputRef.current?.focus();
+        }, 350);
+      }
+    }, 60);
+  };
+
+  // Handle clicking a specific time slot for a table from matrix
   const handleSelectSlot = (table: TableWithAvailability, session: PlaySession) => {
     const status = getSlotStatus(table.id, session);
     const sessionLabel = `${session.session_name} (${session.start_time}–${session.end_time} WIB)`;
@@ -639,7 +726,279 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* 3. TABEL MATRIKS JADWAL 5 MEJA (REALTIME DATABASE)                        */}
+        {/* 3. PILIHAN MEJA & BEBERAPA PILIHAN SESI JAM BERMAIN                       */}
+        {/* ========================================================================= */}
+        <div id="session-picker-section" className="bg-[#111724] border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl mb-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-5 border-b border-slate-800 mb-6">
+            <div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-100 tracking-wide">
+                  PILIHAN MEJA & SESI JAM BERMAIN
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Pilih meja dan pilih salah satu dari beberapa pilihan jam sesi yang masih <strong className="text-emerald-400">AVAILABLE</strong> untuk tanggal <strong className="text-amber-300">{formatIndoDate(selectedDate)}</strong>.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>AVAILABLE = Bisa Dipilih</span>
+              </span>
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/30 font-medium">
+                <span className="w-2 h-2 rounded-full bg-rose-400" />
+                <span>BOOKED = Terisi</span>
+              </span>
+            </div>
+          </div>
+
+          {/* LANGKAH 1: PILIH MEJA */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 inline-flex items-center justify-center text-[11px] font-black">1</span>
+                <span>PILIH MEJA BERMAIN:</span>
+              </div>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                Klik salah satu meja untuk melihat seluruh opsi jam sesi
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+              {tables.map(tbl => {
+                const isTableSelected = selectedTable?.id === tbl.id;
+                const availableCount = displaySessions.filter(s => getSlotStatus(tbl.id, s) === 'AVAILABLE').length;
+                const isVip = tbl.id === 'tbl-05' || tbl.name.toLowerCase().includes('vip');
+
+                return (
+                  <button
+                    key={tbl.id}
+                    type="button"
+                    onClick={() => handleSelectTableOnly(tbl)}
+                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 relative overflow-hidden ${
+                      isTableSelected
+                        ? 'bg-gradient-to-b from-amber-500/20 to-amber-500/5 border-amber-400 text-slate-100 ring-2 ring-amber-400/60 shadow-lg shadow-amber-500/10'
+                        : 'bg-[#161f30] border-slate-700/80 hover:border-slate-500 text-slate-300 hover:bg-[#1a253a]'
+                    }`}
+                  >
+                    {isTableSelected && (
+                      <div className="absolute top-0 right-0 w-7 h-7 bg-amber-400 text-slate-950 flex items-center justify-center rounded-bl-xl font-bold">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 pr-6">
+                      <span className={`font-serif font-black text-sm sm:text-base ${isTableSelected ? 'text-amber-300' : 'text-slate-100'}`}>
+                        {tbl.name}
+                      </span>
+                      {isVip && (
+                        <span className="text-[9px] font-black bg-amber-500/25 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/40">
+                          VIP
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-700/60 mt-1">
+                      <span className="text-slate-400 font-medium">{getTableCapacityLabel(tbl.capacity, tbl.id)}</span>
+                      <span className={`font-extrabold ${availableCount > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {availableCount} Sesi Kosong
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* LANGKAH 2: PILIH JAM BERMAIN */}
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-2 border-b border-slate-800">
+              <div className="space-y-0.5">
+                <div className="text-sm font-extrabold uppercase tracking-wider text-slate-100 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 inline-flex items-center justify-center text-[11px] font-black">2</span>
+                  <span className="font-serif">PILIH JAM BERMAIN</span>
+                  <span className="text-amber-400 font-serif font-black">({selectedTable ? selectedTable.name : 'PILIH MEJA DULU'})</span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Pilih salah satu jam bermain yang masih <strong className="text-emerald-400">AVAILABLE</strong> untuk {formatIndoDate(selectedDate)}
+                </p>
+              </div>
+
+              {/* Status Legend */}
+              <div className="flex items-center gap-2 text-xs flex-wrap bg-[#141b2b] px-3 py-1.5 rounded-xl border border-slate-800">
+                <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                  <span>🟢</span>
+                  <span>AVAILABLE</span>
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="inline-flex items-center gap-1 text-rose-400 font-bold">
+                  <span>🔴</span>
+                  <span>BOOKED</span>
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="inline-flex items-center gap-1 text-amber-300 font-bold">
+                  <span>🟡</span>
+                  <span>SELECTED</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Daftar Pilihan Jam Bermain */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {displaySessions.map(session => {
+                const tableToUse = selectedTable || tables[0];
+                const status = tableToUse ? getSlotStatus(tableToUse.id, session) : 'AVAILABLE';
+                const isSelected = selectedTable && (
+                  selectedSession?.session_id === session.session_id ||
+                  (!selectedSession && selectedTime === session.start_time)
+                );
+                const timeRange = `${session.start_time} – ${session.end_time}`;
+                const durationLabel = calculateDurationLabel(session.start_time, session.end_time);
+                const sessionLabel = `${session.session_name} (${timeRange} WIB)`;
+
+                if (isSelected) {
+                  return (
+                    <div
+                      key={session.session_id || session.start_time}
+                      className="p-4 rounded-xl border-2 border-amber-400 bg-gradient-to-b from-amber-500/20 via-[#182338] to-[#121927] text-left shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/40 flex flex-col justify-between gap-3 relative transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                          {session.session_name}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-xs font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow">
+                          <span>🟡</span>
+                          <span>SELECTED</span>
+                        </span>
+                      </div>
+
+                      <div className="my-0.5">
+                        <div className="font-mono text-lg sm:text-xl font-black text-amber-300 tracking-tight">
+                          [ {timeRange} ]
+                        </div>
+                        <div className="text-xs text-slate-300 mt-0.5 font-medium">
+                          WIB • {durationLabel}
+                        </div>
+                      </div>
+
+                      <div className="text-xs font-extrabold text-amber-300 pt-2 border-t border-amber-500/30 flex items-center justify-between">
+                        <span>✓ Slot Terpilih</span>
+                        <span className="text-[11px] text-slate-300 font-normal">Siap Dipesan</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (status === 'AVAILABLE') {
+                  return (
+                    <button
+                      key={session.session_id || session.start_time}
+                      type="button"
+                      onClick={() => handleSelectSessionOnly(session)}
+                      className="p-4 rounded-xl border border-emerald-500/40 hover:border-emerald-400 bg-[#161f30] hover:bg-[#1d293f] text-left transition-all cursor-pointer flex flex-col justify-between gap-3 shadow-md hover:scale-[1.01] group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300 group-hover:text-amber-300">
+                          {session.session_name}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          <span>🟢</span>
+                          <span>AVAILABLE</span>
+                        </span>
+                      </div>
+
+                      <div className="my-0.5">
+                        <div className="font-mono text-lg sm:text-xl font-black text-slate-100 group-hover:text-emerald-300 tracking-tight">
+                          [ {timeRange} ]
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          WIB • {durationLabel}
+                        </div>
+                      </div>
+
+                      <div className="text-xs font-bold text-emerald-400 pt-2 border-t border-slate-800 flex items-center justify-between">
+                        <span>Pilih Jam Ini</span>
+                        <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                      </div>
+                    </button>
+                  );
+                }
+
+                // status === 'BOOKED' or 'PENDING'
+                return (
+                  <div
+                    key={session.session_id || session.start_time}
+                    onClick={() => onErrorToast(`Slot [ ${timeRange} ] untuk ${tableToUse?.name || 'meja'} sudah terisi (BOOKED). Silakan pilih slot lain yang AVAILABLE (hijau).`)}
+                    className="p-4 rounded-xl border border-rose-500/25 bg-[#141824]/50 text-left cursor-not-allowed opacity-60 flex flex-col justify-between gap-3 select-none"
+                    title="Slot ini sudah terisi penuh dan tidak dapat diklik"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        {session.session_name}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/25">
+                        <span>🔴</span>
+                        <span>BOOKED</span>
+                      </span>
+                    </div>
+
+                    <div className="my-0.5">
+                      <div className="font-mono text-lg sm:text-xl font-bold text-slate-500 line-through decoration-rose-500/60 tracking-tight">
+                        [ {timeRange} ]
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        WIB • {durationLabel}
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-rose-400/80 font-medium pt-2 border-t border-slate-800">
+                      Tidak Dapat Dipilih
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* RINGKASAN PILIHAN JADWAL SETELAH MEMILIH MEJA & JAM */}
+            {selectedTable && (selectedSession || selectedTime) && (
+              <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-[#161f30] to-[#121927] border border-amber-400/40 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-base shadow">
+                    ✓
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                      RINGKASAN PILIHAN JADWAL:
+                    </div>
+                    <div className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-2 flex-wrap mt-0.5">
+                      <span className="font-serif text-amber-400">{selectedTable.name}</span>
+                      <span className="text-slate-500">•</span>
+                      <span>Tanggal: <strong className="text-slate-200">{formatIndoDate(selectedDate)}</strong></span>
+                      <span className="text-slate-500">•</span>
+                      <span>Jam: <strong className="text-amber-400 font-mono">{selectedSession ? `${selectedSession.start_time} – ${selectedSession.end_time}` : formatSlotTime(selectedTime)}</strong> WIB</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    formContainerRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    customerNameInputRef.current?.focus();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer shadow-md transition-all self-start sm:self-auto flex items-center gap-1.5"
+                >
+                  <span>Lanjut Isi Data Booking</span>
+                  <span>↓</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 4. TABEL MATRIKS JADWAL 5 MEJA (REALTIME DATABASE)                        */}
         {/* ========================================================================= */}
         <div className="mb-10">
           
@@ -649,7 +1008,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>
-                  Slot Terpilih: <strong className="text-slate-100">{selectedTable.name}</strong> • Pukul <strong className="text-amber-300">{formatSlotTime(selectedTime)} WIB</strong> ({formatIndoDate(selectedDate)})
+                  Slot Terpilih: <strong className="text-slate-100">{selectedTable.name}</strong> • {selectedSession ? `${selectedSession.session_name} (${selectedSession.start_time}–${selectedSession.end_time} WIB)` : `Pukul ${formatSlotTime(selectedTime)} WIB`} ({formatIndoDate(selectedDate)})
                 </span>
               </div>
               <a
@@ -661,7 +1020,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                 }}
                 className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer transition-colors shadow-sm"
               >
-                <span>Isi Data Reservasi ↓</span>
+                <span>Lanjut Isi Data Reservasi ↓</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -859,27 +1218,50 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             /* Active pre-filled reservation form */
             <form onSubmit={handleOpenReview} className="space-y-6">
               
-              {/* Highlighted Banner of Selected Slot */}
-              <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-400/40 text-xs sm:text-sm text-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="text-[11px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Slot Meja Berhasil Dipilih dari Jadwal:</span>
+              {/* RINGKASAN PILIHAN JADWAL SEBELUM MENGISI DATA BOOKING */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-[#182338] to-[#121927] border-2 border-amber-400/50 shadow-xl text-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-700/60 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-amber-400 text-slate-950 font-black flex items-center justify-center text-xs shadow">
+                      ✓
+                    </span>
+                    <div>
+                      <h4 className="font-serif font-black text-slate-100 text-sm sm:text-base tracking-wide uppercase">
+                        RINGKASAN PILIHAN ANDA
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Slot terkunci otomatis. Lengkapi formulir di bawah ini untuk mengirimkan reservasi ke WhatsApp Admin.
+                      </p>
+                    </div>
                   </div>
-                  <div className="font-serif text-xl font-extrabold text-slate-100 mt-1">
-                    {selectedTable.name} • {getTableCapacityLabel(selectedTable.capacity, selectedTable.id)}
-                  </div>
-                  <div className="text-xs text-slate-300 mt-1">
-                    Tanggal: <strong className="text-amber-300">{formatIndoDate(selectedDate)}</strong> • Sesi: <strong className="text-amber-300">{selectedSession ? `${selectedSession.session_name} (${selectedSession.start_time}–${selectedSession.end_time} WIB)` : `${formatSlotTime(selectedTime)} WIB`}</strong>
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/60 text-amber-300 font-bold text-xs self-start sm:self-auto">
+                    <span>🟡</span>
+                    <span>SELECTED</span>
+                  </span>
                 </div>
 
-                <div className="text-left sm:text-right font-bold text-amber-300 text-sm sm:text-base border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
-                  <div className="text-xs text-emerald-400 font-mono flex items-center sm:justify-end gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>STATUS: AVAILABLE</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-[#0f141f]/90 p-3 rounded-xl border border-slate-800">
+                    <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">PILIHAN MEJA</span>
+                    <span className="text-base font-serif font-black text-amber-300 block">{selectedTable.name}</span>
+                    <span className="text-[11px] text-slate-400">{getTableCapacityLabel(selectedTable.capacity, selectedTable.id)}</span>
                   </div>
-                  <div className="text-[11px] font-sans font-normal text-slate-400 mt-0.5">Epic Mahjong Alam Sutera</div>
+
+                  <div className="bg-[#0f141f]/90 p-3 rounded-xl border border-slate-800">
+                    <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">TANGGAL RESERVASI</span>
+                    <span className="text-base font-bold text-slate-100 block">{formatIndoDate(selectedDate)}</span>
+                    <span className="text-[11px] text-slate-400 font-mono">{selectedDate}</span>
+                  </div>
+
+                  <div className="bg-[#0f141f]/90 p-3 rounded-xl border border-slate-800">
+                    <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">JAM BERMAIN</span>
+                    <span className="text-base font-mono font-black text-amber-400 block">
+                      [ {selectedSession ? `${selectedSession.start_time} – ${selectedSession.end_time}` : formatSlotTime(selectedTime)} ]
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {selectedSession ? `${selectedSession.session_name} (${calculateDurationLabel(selectedSession.start_time, selectedSession.end_time)})` : 'Sesi Bermain'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -931,51 +1313,91 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   </p>
                 </div>
 
-                {/* Rincian Terkunci: Tanggal & Jam Terpilih */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    Tanggal & Jam Sesi (Otomatis dari Jadwal)
-                  </label>
-                  <div className="bg-[#161f30]/80 border border-slate-800 rounded-xl px-4 py-3 text-slate-300 text-xs sm:text-sm flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-amber-400" />
-                      <span className="font-semibold text-slate-100">{formatIndoDate(selectedDate)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-amber-400" />
-                      <span className="font-semibold text-amber-400">
-                        {selectedSession ? `${selectedSession.session_name}: ${selectedSession.start_time}–${selectedSession.end_time} WIB` : `${formatSlotTime(selectedTime)} WIB`}
+                {/* Rincian Otomatis: Tanggal, Meja, Sesi, Jam Mulai & Jam Selesai */}
+                <div className="md:col-span-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Rincian Jadwal Terpilih Otomatis (Terkunci)</span>
+                    </label>
+                    <span className="text-[11px] text-emerald-400 font-medium hidden sm:inline">
+                      ✓ Tidak perlu memilih ulang meja atau jam
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 p-3.5 rounded-xl bg-[#141b2b] border border-slate-800">
+                    {/* Tanggal */}
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
+                        <CalendarIcon className="w-3 h-3 text-amber-400" />
+                        <span>Tanggal</span>
                       </span>
+                      <div className="text-xs sm:text-sm font-bold text-slate-100 truncate">
+                        {formatIndoDate(selectedDate)}
+                      </div>
+                    </div>
+
+                    {/* Meja */}
+                    <div className="space-y-0.5 border-l border-slate-800/80 pl-2.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        Meja
+                      </span>
+                      <div className="text-xs sm:text-sm font-bold text-amber-300 truncate">
+                        {selectedTable.name}
+                      </div>
+                    </div>
+
+                    {/* Sesi */}
+                    <div className="space-y-0.5 border-l border-slate-800/80 pl-2.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span>Sesi</span>
+                      </span>
+                      <div className="text-xs sm:text-sm font-bold text-amber-400 truncate">
+                        {selectedSession ? selectedSession.session_name : 'Sesi Khusus'}
+                      </div>
+                    </div>
+
+                    {/* Jam Mulai */}
+                    <div className="space-y-0.5 border-l border-slate-800/80 pl-2.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        Jam Mulai
+                      </span>
+                      <div className="text-xs sm:text-sm font-mono font-bold text-slate-100">
+                        {selectedSession ? selectedSession.start_time : selectedTime} WIB
+                      </div>
+                    </div>
+
+                    {/* Jam Selesai */}
+                    <div className="space-y-0.5 border-l border-slate-800/80 pl-2.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        Jam Selesai
+                      </span>
+                      <div className="text-xs sm:text-sm font-mono font-bold text-slate-100">
+                        {selectedSession ? selectedSession.end_time : (formatSlotTime(selectedTime).split(' - ')[1] || 'Selesai')} WIB
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Meja & Jumlah Orang */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      Meja Terpilih
-                    </label>
-                    <div className="bg-[#161f30]/80 border border-slate-800 rounded-xl px-4 py-3 text-amber-300 font-extrabold text-sm">
-                      {selectedTable.name}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label htmlFor="guest_count" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Jumlah Pemain <span className="text-rose-400">*</span>
-                    </label>
-                    <input
-                      id="guest_count"
-                      type="number"
-                      min={1}
-                      max={selectedTable.capacity || 6}
-                      required
-                      value={guestCount}
-                      onChange={(e) => setGuestCount(Number(e.target.value))}
-                      className="w-full bg-[#161f30] border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
+                {/* Jumlah Orang & Catatan */}
+                <div className="space-y-1.5">
+                  <label htmlFor="guest_count" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Jumlah Orang / Pemain <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    id="guest_count"
+                    type="number"
+                    min={1}
+                    max={selectedTable.capacity || 6}
+                    required
+                    value={guestCount}
+                    onChange={(e) => setGuestCount(Number(e.target.value))}
+                    className="w-full bg-[#161f30] border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-bold"
+                  />
+                  <span className="text-[11px] text-slate-400">
+                    Kapasitas meja: {getTableCapacityLabel(selectedTable.capacity, selectedTable.id)}
+                  </span>
                 </div>
 
                 {/* Catatan (Opsional) */}

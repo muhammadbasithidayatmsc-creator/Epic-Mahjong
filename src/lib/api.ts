@@ -196,6 +196,8 @@ export function buildWhatsAppLinks(adminPhoneInput: string, res: {
   customer_phone: string;
   reservation_date: string;
   reservation_time: string;
+  start_time?: string;
+  end_time?: string;
   table_name: string;
   guest_count: number;
   notes?: string;
@@ -211,23 +213,25 @@ export function buildWhatsAppLinks(adminPhoneInput: string, res: {
   }
 
   const formattedDate = formatIndoDate(res.reservation_date);
-  const formattedTime = formatSlotTime(res.reservation_time);
+  const jamText = (res.start_time && res.end_time)
+    ? `${res.start_time} – ${res.end_time}`
+    : formatSlotTime(res.reservation_time);
+
+  const catatanText = (res.notes && res.notes.trim()) ? res.notes.trim() : '-';
 
   const message = 
-`Halo EPIC MAHJONG,
-
-Saya ingin melakukan reservasi meja.
+`EPIC MAHJONG — BOOKING REQUEST
 
 Booking ID: ${res.booking_code}
 Nama: ${res.customer_name}
 No. WhatsApp: ${res.customer_phone}
 Tanggal: ${formattedDate}
-Jam: ${formattedTime}
-Meja: ${res.table_name}
-Jumlah orang: ${res.guest_count}
-Catatan: ${res.notes && res.notes.trim() ? res.notes.trim() : '-'}
+Table: ${res.table_name || 'TABLE'}
+Jam Bermain: ${jamText}
+Jumlah Pemain: ${res.guest_count} Orang
+Catatan: ${catatanText}
 
-Mohon informasi terkait pembayaran dan konfirmasi reservasi.
+Mohon informasi untuk proses konfirmasi dan pembayaran.
 
 Terima kasih.`;
 
@@ -1273,6 +1277,34 @@ export const api = {
     const filtered = local.filter(s => s.session_id !== id);
     saveLocalSessions(filtered);
     return { success: true, deactivated: false, message: 'Sesi berhasil dihapus.' };
+  },
+
+  async batchSetSessions(sessions: Array<{ session_name: string; start_time: string; end_time: string; status?: SessionStatus }>): Promise<PlaySession[]> {
+    const res = await safeFetch('/api/admin/sessions/batch', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ sessions })
+    });
+    if (res.ok && res.isJson && res.data?.sessions) {
+      saveLocalSessions(res.data.sessions);
+      return res.data.sessions;
+    }
+    if (res.isJson && res.data?.error) {
+      throw new Error(res.data.error);
+    }
+    // Local fallback
+    const now = new Date().toISOString();
+    const created: PlaySession[] = sessions.map((s, idx) => ({
+      session_id: `ses-${Date.now()}-${idx + 1}`,
+      session_name: s.session_name,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      status: s.status || 'ACTIVE',
+      created_at: now,
+      updated_at: now
+    }));
+    saveLocalSessions(created);
+    return created;
   },
 
   async updateSettings(settings: Partial<BusinessSettings>): Promise<{ success: boolean; settings: BusinessSettings }> {

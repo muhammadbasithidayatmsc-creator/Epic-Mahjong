@@ -366,54 +366,6 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     return tbl?.status || 'AVAILABLE';
   };
 
-  // Handle switching table tab
-  const handleSelectTableOnly = (table: TableWithAvailability) => {
-    setSelectedTable(table);
-    setGuestCount(table.capacity || 4);
-    // If previous selectedSession is booked on this table, clear so user selects an available one
-    if (selectedSession) {
-      const status = getSlotStatus(table.id, selectedSession);
-      if (status !== 'AVAILABLE') {
-        setSelectedSession(null);
-      }
-    }
-  };
-
-  // Handle clicking a specific session card directly
-  const handleSelectSessionOnly = (session: PlaySession) => {
-    const tableToUse = selectedTable || (tables.length > 0 ? tables[0] : null);
-    if (!tableToUse) return;
-
-    const status = getSlotStatus(tableToUse.id, session);
-    const sessionLabel = `${session.session_name} (${session.start_time}–${session.end_time} WIB)`;
-
-    if (status === 'BOOKED') {
-      onErrorToast(`Slot ${sessionLabel} untuk ${tableToUse.name} sudah terisi (BOOKED). Silakan pilih sesi hijau (AVAILABLE) lainnya.`);
-      return;
-    }
-    if (status === 'PENDING') {
-      onErrorToast(`Slot ${sessionLabel} untuk ${tableToUse.name} sedang dalam proses konfirmasi (PENDING). Silakan pilih sesi yang berstatus AVAILABLE.`);
-      return;
-    }
-
-    if (!selectedTable) {
-      setSelectedTable(tableToUse);
-    }
-    setSelectedSession(session);
-    setSelectedTime(session.start_time);
-    setConflictError(null);
-
-    // Smooth scroll down to customer form & focus on customer name
-    setTimeout(() => {
-      if (formContainerRef.current) {
-        formContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(() => {
-          customerNameInputRef.current?.focus();
-        }, 350);
-      }
-    }, 60);
-  };
-
   // Handle clicking a specific time slot for a table from matrix
   const handleSelectSlot = (table: TableWithAvailability, session: PlaySession) => {
     const status = getSlotStatus(table.id, session);
@@ -726,279 +678,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* 3. PILIHAN MEJA & BEBERAPA PILIHAN SESI JAM BERMAIN                       */}
-        {/* ========================================================================= */}
-        <div id="session-picker-section" className="bg-[#111724] border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-5 border-b border-slate-800 mb-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base sm:text-lg font-extrabold text-slate-100 tracking-wide">
-                  PILIHAN MEJA & SESI JAM BERMAIN
-                </h3>
-              </div>
-              <p className="text-xs text-slate-400 mt-1">
-                Pilih meja dan pilih salah satu dari beberapa pilihan jam sesi yang masih <strong className="text-emerald-400">AVAILABLE</strong> untuk tanggal <strong className="text-amber-300">{formatIndoDate(selectedDate)}</strong>.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs flex-wrap">
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>AVAILABLE = Bisa Dipilih</span>
-              </span>
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/30 font-medium">
-                <span className="w-2 h-2 rounded-full bg-rose-400" />
-                <span>BOOKED = Terisi</span>
-              </span>
-            </div>
-          </div>
-
-          {/* LANGKAH 1: PILIH MEJA */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 inline-flex items-center justify-center text-[11px] font-black">1</span>
-                <span>PILIH MEJA BERMAIN:</span>
-              </div>
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Klik salah satu meja untuk melihat seluruh opsi jam sesi
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-              {tables.map(tbl => {
-                const isTableSelected = selectedTable?.id === tbl.id;
-                const availableCount = displaySessions.filter(s => getSlotStatus(tbl.id, s) === 'AVAILABLE').length;
-                const isVip = tbl.id === 'tbl-05' || tbl.name.toLowerCase().includes('vip');
-
-                return (
-                  <button
-                    key={tbl.id}
-                    type="button"
-                    onClick={() => handleSelectTableOnly(tbl)}
-                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 relative overflow-hidden ${
-                      isTableSelected
-                        ? 'bg-gradient-to-b from-amber-500/20 to-amber-500/5 border-amber-400 text-slate-100 ring-2 ring-amber-400/60 shadow-lg shadow-amber-500/10'
-                        : 'bg-[#161f30] border-slate-700/80 hover:border-slate-500 text-slate-300 hover:bg-[#1a253a]'
-                    }`}
-                  >
-                    {isTableSelected && (
-                      <div className="absolute top-0 right-0 w-7 h-7 bg-amber-400 text-slate-950 flex items-center justify-center rounded-bl-xl font-bold">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5 pr-6">
-                      <span className={`font-serif font-black text-sm sm:text-base ${isTableSelected ? 'text-amber-300' : 'text-slate-100'}`}>
-                        {tbl.name}
-                      </span>
-                      {isVip && (
-                        <span className="text-[9px] font-black bg-amber-500/25 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/40">
-                          VIP
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-700/60 mt-1">
-                      <span className="text-slate-400 font-medium">{getTableCapacityLabel(tbl.capacity, tbl.id)}</span>
-                      <span className={`font-extrabold ${availableCount > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {availableCount} Sesi Kosong
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* LANGKAH 2: PILIH JAM BERMAIN */}
-          <div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-2 border-b border-slate-800">
-              <div className="space-y-0.5">
-                <div className="text-sm font-extrabold uppercase tracking-wider text-slate-100 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 inline-flex items-center justify-center text-[11px] font-black">2</span>
-                  <span className="font-serif">PILIH JAM BERMAIN</span>
-                  <span className="text-amber-400 font-serif font-black">({selectedTable ? selectedTable.name : 'PILIH MEJA DULU'})</span>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Pilih salah satu jam bermain yang masih <strong className="text-emerald-400">AVAILABLE</strong> untuk {formatIndoDate(selectedDate)}
-                </p>
-              </div>
-
-              {/* Status Legend */}
-              <div className="flex items-center gap-2 text-xs flex-wrap bg-[#141b2b] px-3 py-1.5 rounded-xl border border-slate-800">
-                <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                  <span>🟢</span>
-                  <span>AVAILABLE</span>
-                </span>
-                <span className="text-slate-600">•</span>
-                <span className="inline-flex items-center gap-1 text-rose-400 font-bold">
-                  <span>🔴</span>
-                  <span>BOOKED</span>
-                </span>
-                <span className="text-slate-600">•</span>
-                <span className="inline-flex items-center gap-1 text-amber-300 font-bold">
-                  <span>🟡</span>
-                  <span>SELECTED</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Daftar Pilihan Jam Bermain */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {displaySessions.map(session => {
-                const tableToUse = selectedTable || tables[0];
-                const status = tableToUse ? getSlotStatus(tableToUse.id, session) : 'AVAILABLE';
-                const isSelected = selectedTable && (
-                  selectedSession?.session_id === session.session_id ||
-                  (!selectedSession && selectedTime === session.start_time)
-                );
-                const timeRange = `${session.start_time} – ${session.end_time}`;
-                const durationLabel = calculateDurationLabel(session.start_time, session.end_time);
-                const sessionLabel = `${session.session_name} (${timeRange} WIB)`;
-
-                if (isSelected) {
-                  return (
-                    <div
-                      key={session.session_id || session.start_time}
-                      className="p-4 rounded-xl border-2 border-amber-400 bg-gradient-to-b from-amber-500/20 via-[#182338] to-[#121927] text-left shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/40 flex flex-col justify-between gap-3 relative transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black uppercase tracking-wider text-amber-300">
-                          {session.session_name}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-xs font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow">
-                          <span>🟡</span>
-                          <span>SELECTED</span>
-                        </span>
-                      </div>
-
-                      <div className="my-0.5">
-                        <div className="font-mono text-lg sm:text-xl font-black text-amber-300 tracking-tight">
-                          [ {timeRange} ]
-                        </div>
-                        <div className="text-xs text-slate-300 mt-0.5 font-medium">
-                          WIB • {durationLabel}
-                        </div>
-                      </div>
-
-                      <div className="text-xs font-extrabold text-amber-300 pt-2 border-t border-amber-500/30 flex items-center justify-between">
-                        <span>✓ Slot Terpilih</span>
-                        <span className="text-[11px] text-slate-300 font-normal">Siap Dipesan</span>
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (status === 'AVAILABLE') {
-                  return (
-                    <button
-                      key={session.session_id || session.start_time}
-                      type="button"
-                      onClick={() => handleSelectSessionOnly(session)}
-                      className="p-4 rounded-xl border border-emerald-500/40 hover:border-emerald-400 bg-[#161f30] hover:bg-[#1d293f] text-left transition-all cursor-pointer flex flex-col justify-between gap-3 shadow-md hover:scale-[1.01] group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300 group-hover:text-amber-300">
-                          {session.session_name}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                          <span>🟢</span>
-                          <span>AVAILABLE</span>
-                        </span>
-                      </div>
-
-                      <div className="my-0.5">
-                        <div className="font-mono text-lg sm:text-xl font-black text-slate-100 group-hover:text-emerald-300 tracking-tight">
-                          [ {timeRange} ]
-                        </div>
-                        <div className="text-xs text-slate-400 mt-0.5">
-                          WIB • {durationLabel}
-                        </div>
-                      </div>
-
-                      <div className="text-xs font-bold text-emerald-400 pt-2 border-t border-slate-800 flex items-center justify-between">
-                        <span>Pilih Jam Ini</span>
-                        <span className="group-hover:translate-x-0.5 transition-transform">→</span>
-                      </div>
-                    </button>
-                  );
-                }
-
-                // status === 'BOOKED' or 'PENDING'
-                return (
-                  <div
-                    key={session.session_id || session.start_time}
-                    onClick={() => onErrorToast(`Slot [ ${timeRange} ] untuk ${tableToUse?.name || 'meja'} sudah terisi (BOOKED). Silakan pilih slot lain yang AVAILABLE (hijau).`)}
-                    className="p-4 rounded-xl border border-rose-500/25 bg-[#141824]/50 text-left cursor-not-allowed opacity-60 flex flex-col justify-between gap-3 select-none"
-                    title="Slot ini sudah terisi penuh dan tidak dapat diklik"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                        {session.session_name}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/25">
-                        <span>🔴</span>
-                        <span>BOOKED</span>
-                      </span>
-                    </div>
-
-                    <div className="my-0.5">
-                      <div className="font-mono text-lg sm:text-xl font-bold text-slate-500 line-through decoration-rose-500/60 tracking-tight">
-                        [ {timeRange} ]
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        WIB • {durationLabel}
-                      </div>
-                    </div>
-
-                    <div className="text-xs text-rose-400/80 font-medium pt-2 border-t border-slate-800">
-                      Tidak Dapat Dipilih
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* RINGKASAN PILIHAN JADWAL SETELAH MEMILIH MEJA & JAM */}
-            {selectedTable && (selectedSession || selectedTime) && (
-              <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-[#161f30] to-[#121927] border border-amber-400/40 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-base shadow">
-                    ✓
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                      RINGKASAN PILIHAN JADWAL:
-                    </div>
-                    <div className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-2 flex-wrap mt-0.5">
-                      <span className="font-serif text-amber-400">{selectedTable.name}</span>
-                      <span className="text-slate-500">•</span>
-                      <span>Tanggal: <strong className="text-slate-200">{formatIndoDate(selectedDate)}</strong></span>
-                      <span className="text-slate-500">•</span>
-                      <span>Jam: <strong className="text-amber-400 font-mono">{selectedSession ? `${selectedSession.start_time} – ${selectedSession.end_time}` : formatSlotTime(selectedTime)}</strong> WIB</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    formContainerRef.current?.scrollIntoView({ behavior: 'smooth' });
-                    customerNameInputRef.current?.focus();
-                  }}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer shadow-md transition-all self-start sm:self-auto flex items-center gap-1.5"
-                >
-                  <span>Lanjut Isi Data Booking</span>
-                  <span>↓</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 4. TABEL MATRIKS JADWAL 5 MEJA (REALTIME DATABASE)                        */}
+        {/* 3. TABEL MATRIKS JADWAL 5 MEJA (REALTIME DATABASE)                        */}
         {/* ========================================================================= */}
         <div className="mb-10">
           
@@ -1037,9 +717,9 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
               <table className="w-full text-left text-sm min-w-[720px]">
                 <thead className="bg-[#172030] text-xs uppercase tracking-wider text-slate-300 border-b border-slate-800">
                   <tr>
-                    <th className="py-4 px-5 font-bold text-amber-400 flex items-center gap-1.5 whitespace-nowrap bg-[#172030]">
+                    <th className="py-4 px-5 font-bold text-amber-400 flex items-center gap-2 whitespace-nowrap bg-[#172030]">
                       <Clock className="w-4 h-4 text-amber-400" />
-                      <span>Sesi Jam Bermain</span>
+                      <span>JAM BERMAIN</span>
                     </th>
                     {tables.map(table => (
                       <th key={table.id} className="py-4 px-3 font-bold text-center border-l border-slate-800/80">
@@ -1065,14 +745,22 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                     return (
                       <tr key={session.session_id || session.start_time} className="hover:bg-[#141b2b] transition-colors">
                         <td className="py-3.5 px-5 font-bold text-slate-200 whitespace-nowrap bg-[#111724]/70">
-                          <div className="text-xs font-semibold text-amber-300">{session.session_name}</div>
-                          <div className="text-[11px] font-mono text-slate-300">{sessionRangeText} WIB</div>
+                          <div className="font-mono text-sm sm:text-base font-extrabold text-amber-300 tracking-tight">
+                            {sessionRangeText}
+                          </div>
+                          {session.session_name && (
+                            <div className="text-[11px] text-slate-400 mt-0.5 font-normal">
+                              {session.session_name}
+                            </div>
+                          )}
                         </td>
 
                         {tables.map(table => {
                           const status = getSlotStatus(table.id, session);
                           const isSelected = selectedTable?.id === table.id && 
-                            (selectedSession ? selectedSession.session_id === session.session_id : selectedTime === session.start_time);
+                            (selectedSession 
+                              ? (selectedSession.session_id === session.session_id || (selectedSession.start_time === session.start_time && selectedSession.end_time === session.end_time))
+                              : selectedTime === session.start_time);
                           const sessionLabel = `${session.session_name} (${sessionRangeText} WIB)`;
 
                           if (status === 'AVAILABLE') {
@@ -1081,7 +769,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => handleSelectSlot(table, session)}
-                                  className={`w-full py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                  className={`w-full py-2.5 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                                     isSelected
                                       ? 'bg-amber-400 text-slate-950 font-black shadow-lg ring-2 ring-amber-300'
                                       : 'bg-emerald-500/15 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/40 hover:border-emerald-400 shadow-sm'
@@ -1110,7 +798,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => onErrorToast(`Slot ${sessionLabel} di ${table.name} sedang dalam proses konfirmasi.`)}
-                                  className="w-full py-2 px-2.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-400/90 border border-amber-500/25 cursor-not-allowed opacity-80 flex items-center justify-center gap-1"
+                                  className="w-full py-2.5 px-2.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-400/90 border border-amber-500/25 cursor-not-allowed opacity-80 flex items-center justify-center gap-1"
                                   title="Menunggu konfirmasi admin"
                                 >
                                   <Clock className="w-3 h-3 text-amber-400/70" />
@@ -1125,7 +813,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                               <button
                                 type="button"
                                 onClick={() => onErrorToast(`Slot ${sessionLabel} di ${table.name} sudah terisi penuh (BOOKED).`)}
-                                className="w-full py-2 px-2.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-400/80 border border-rose-500/20 cursor-not-allowed opacity-75 flex items-center justify-center gap-1"
+                                className="w-full py-2.5 px-2.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-400/80 border border-rose-500/20 cursor-not-allowed opacity-75 flex items-center justify-center gap-1"
                                 title="Slot sudah terisi penuh"
                               >
                                 <Lock className="w-3 h-3 text-rose-400/60" />

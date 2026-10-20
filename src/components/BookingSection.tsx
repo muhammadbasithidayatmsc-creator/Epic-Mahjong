@@ -128,7 +128,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
 }) => {
   // Dynamic sessions from DB / Settings
   const [sessions, setSessions] = useState<PlaySession[]>([]);
-  const [selectedSession, setSelectedSession] = useState<PlaySession | null>(null);
+  const [selectedSessions, setSelectedSessions] = useState<PlaySession[]>([]);
 
   // Today formatted as YYYY-MM-DD
   const todayStr = useMemo(() => {
@@ -297,7 +297,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     try {
       const [schedData, availData] = await Promise.all([
         api.getSchedule(selectedDate),
-        api.getAvailability(selectedDate, selectedSession ? selectedSession.start_time : selectedTime)
+        api.getAvailability(selectedDate, selectedSessions[0]?.start_time || selectedTime)
       ]);
 
       if (Array.isArray(schedData)) {
@@ -315,17 +315,22 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
           }
         }
 
-        // Verify if selectedSession is still available
-        if (selectedTable && selectedSession && Array.isArray(schedData)) {
-          const slot = schedData.find(s => 
-            (s.session_id && s.session_id === selectedSession.session_id) || 
-            s.time === selectedSession.start_time
-          );
-          if (slot) {
+        // Verify if any selectedSessions became unavailable
+        if (selectedTable && selectedSessions.length > 0 && Array.isArray(schedData)) {
+          const validSessions = selectedSessions.filter(s => {
+            const slot = schedData.find(sd => 
+              (sd.session_id && sd.session_id === s.session_id) || 
+              sd.time === s.start_time
+            );
+            if (!slot) return true;
             const tbl = slot.tables.find(t => t.table_id === selectedTable.id);
-            if (tbl && tbl.status !== 'AVAILABLE') {
-              // Slot specifically became booked by another customer
-              setSelectedSession(null);
+            return tbl ? tbl.status === 'AVAILABLE' : true;
+          });
+
+          if (validSessions.length !== selectedSessions.length) {
+            setSelectedSessions(validSessions);
+            if (validSessions.length === 0) {
+              setSelectedTable(null);
             }
           }
         }
@@ -352,7 +357,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       fetchScheduleAndAvailability(true);
     }, 18000);
     return () => clearInterval(timer);
-  }, [selectedDate, selectedTime, selectedTable, selectedSession]);
+  }, [selectedDate, selectedTime, selectedTable, selectedSessions]);
 
   // Check status of a specific table at a specific session from daySchedule
   const getSlotStatus = (tableId: string, session: PlaySession): 'AVAILABLE' | 'PENDING' | 'BOOKED' => {
@@ -366,10 +371,27 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     return tbl?.status || 'AVAILABLE';
   };
 
+  // Sorted list of chosen sessions
+  const sortedSelectedSessions = useMemo<PlaySession[]>(() => {
+    return [...selectedSessions].sort((a, b) => {
+      const [aH, aM] = a.start_time.split(':').map(Number);
+      const [bH, bM] = b.start_time.split(':').map(Number);
+      return (aH * 60 + (aM || 0)) - (bH * 60 + (bM || 0));
+    });
+  }, [selectedSessions]);
+
+  const earliestStartTime = sortedSelectedSessions[0]?.start_time || '10:00';
+  const latestEndTime = sortedSelectedSessions[sortedSelectedSessions.length - 1]?.end_time || '11:00';
+  const totalDurationHours = sortedSelectedSessions.length;
+  const selectedSlotStrings = useMemo(() => {
+    return sortedSelectedSessions.map(s => `${s.start_time}–${s.end_time}`);
+  }, [sortedSelectedSessions]);
+  const jamDisplay = `${earliestStartTime}–${latestEndTime}`;
+
   // Handle clicking a specific time slot for a table from matrix
   const handleSelectSlot = (table: TableWithAvailability, session: PlaySession) => {
     const status = getSlotStatus(table.id, session);
-    const sessionLabel = `${session.session_name} (${session.start_time}–${session.end_time} WIB)`;
+    const sessionLabel = `${session.session_name || `${session.start_time}–${session.end_time}`} (${session.start_time}–${session.end_time} WIB)`;
 
     if (status === 'BOOKED') {
       onErrorToast(`Slot ${sessionLabel} untuk ${table.name} sudah terisi (BOOKED). Silakan pilih slot hijau (AVAILABLE) lainnya.`);
@@ -380,22 +402,44 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       return;
     }
 
-    // Set selected table, session, time, and guest count
-    setSelectedTable(table);
-    setSelectedSession(session);
-    setSelectedTime(session.start_time);
-    setGuestCount(table.capacity || 4);
     setConflictError(null);
 
-    // Smooth scroll down to customer form & focus on customer name
-    setTimeout(() => {
-      if (formContainerRef.current) {
-        formContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(() => {
-          customerNameInputRef.current?.focus();
-        }, 400);
+    // If changing table, start new selection on that table
+    if (!selectedTable || selectedTable.id !== table.id) {
+      setSelectedTable(table);
+      setSelectedSessions([session]);
+      setSelectedTime(session.start_time);
+      setGuestCount(table.capacity || 4);
+      return;
+    }
+
+    // Same table: check if session is already selected
+    const isAlreadySelected = selectedSessions.some(
+      s => s.session_id === session.session_id || (s.start_time === session.start_time && s.end_time === session.end_time)
+    );
+
+    if (isAlreadySelected) {
+      if (selectedSessions.length > 1) {
+        // Toggle off this slot
+        const filtered = selectedSessions.filter(
+          s => !(s.session_id === session.session_id || (s.start_time === session.start_time && s.end_time === session.end_time))
+        );
+        setSelectedSessions(filtered);
+      } else {
+        // Deselect table and all slots
+        setSelectedSessions([]);
+        setSelectedTable(null);
       }
-    }, 50);
+    } else {
+      // Add slot to selection
+      const updated = [...selectedSessions, session];
+      updated.sort((a, b) => {
+        const [aH, aM] = a.start_time.split(':').map(Number);
+        const [bH, bM] = b.start_time.split(':').map(Number);
+        return (aH * 60 + (aM || 0)) - (bH * 60 + (bM || 0));
+      });
+      setSelectedSessions(updated);
+    }
   };
 
   // Open native calendar picker
@@ -411,12 +455,12 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     e.preventDefault();
     setConflictError(null);
 
-    if (!selectedDate || !selectedTime) {
-      onErrorToast('Silakan pilih Tanggal dan Jam sesi reservasi.');
+    if (!selectedDate) {
+      onErrorToast('Silakan pilih Tanggal bermain.');
       return;
     }
-    if (!selectedTable) {
-      onErrorToast('Silakan pilih salah satu slot meja yang berstatus AVAILABLE.');
+    if (!selectedTable || selectedSessions.length === 0) {
+      onErrorToast('Silakan pilih salah satu atau beberapa slot jam meja yang berstatus AVAILABLE.');
       return;
     }
     if (!customerName.trim()) {
@@ -441,7 +485,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
 
   // Submit reservation and trigger WhatsApp (Strict Anti-Double Booking validation enforced)
   const handleConfirmBooking = async () => {
-    if (!selectedTable) return;
+    if (!selectedTable || selectedSessions.length === 0) return;
     setSubmitting(true);
     setConflictError(null);
 
@@ -450,11 +494,13 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
         customer_name: customerName.trim(),
         customer_phone: customerPhone.trim(),
         reservation_date: selectedDate,
-        reservation_time: selectedSession ? selectedSession.start_time : selectedTime,
-        session_id: selectedSession?.session_id,
-        start_time: selectedSession?.start_time,
-        end_time: selectedSession?.end_time,
-        session_name: selectedSession?.session_name,
+        reservation_time: earliestStartTime,
+        session_id: sortedSelectedSessions[0]?.session_id,
+        start_time: earliestStartTime,
+        end_time: latestEndTime,
+        session_name: `${totalDurationHours} Jam Bermain`,
+        selected_slots: selectedSlotStrings,
+        duration_hours: totalDurationHours,
         table_id: selectedTable.id,
         guest_count: guestCount,
         notes: notes.trim()
@@ -485,7 +531,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       setCustomerPhone('');
       setNotes('');
       setSelectedTable(null);
-      setSelectedSession(null);
+      setSelectedSessions([]);
 
       // Refresh schedule immediately to reflect new status
       fetchScheduleAndAvailability();
@@ -497,10 +543,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
       setConflictError(errMsg);
       onErrorToast(errMsg);
 
-      // Reset selected table so user picks another available one
-      setSelectedTable(null);
-      setSelectedSession(null);
-      // Immediately refresh table availability to show new BOOKED status
+      // Refresh table availability to show new status
       fetchScheduleAndAvailability();
     } finally {
       setSubmitting(false);
@@ -683,13 +726,34 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
         <div className="mb-10">
           
           {/* Active selection helper notice */}
-          {selectedTable ? (
-            <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs sm:text-sm flex items-center justify-between flex-wrap gap-2 animate-in fade-in shadow-md">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>
-                  Slot Terpilih: <strong className="text-slate-100">{selectedTable.name}</strong> • {selectedSession ? `${selectedSession.session_name} (${selectedSession.start_time}–${selectedSession.end_time} WIB)` : `Pukul ${formatSlotTime(selectedTime)} WIB`} ({formatIndoDate(selectedDate)})
-                </span>
+          {selectedTable && selectedSessions.length > 0 ? (
+            <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-[#161f30] to-[#121927] border border-amber-400/50 text-slate-100 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in shadow-md">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="font-bold text-amber-300 uppercase tracking-wide">
+                    Slot Terpilih: <strong className="text-white text-sm sm:text-base">{selectedTable.name}</strong>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-xs shadow-sm">
+                    {totalDurationHours} Jam Bermain
+                  </span>
+                </div>
+                <div className="text-xs text-slate-300 flex items-center gap-2 flex-wrap">
+                  <span>Tanggal: <strong className="text-slate-100">{formatIndoDate(selectedDate)}</strong></span>
+                  <span>•</span>
+                  <span>Jam: <strong className="text-amber-400 font-mono font-bold">{jamDisplay} WIB</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[11px] text-slate-400 font-semibold">Slot Dipilih:</span>
+                  {sortedSelectedSessions.map(s => (
+                    <span key={s.session_id || s.start_time} className="px-2 py-0.5 rounded-md bg-[#162032] border border-amber-400/40 text-amber-300 font-mono text-[11px] font-bold">
+                      {s.start_time}–{s.end_time}
+                    </span>
+                  ))}
+                  <span className="text-[10px] text-slate-400 italic">
+                    (Klik slot lagi untuk menambah / mengurangi jam)
+                  </span>
+                </div>
               </div>
               <a
                 href="#booking-form-card"
@@ -698,16 +762,16 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   formContainerRef.current?.scrollIntoView({ behavior: 'smooth' });
                   customerNameInputRef.current?.focus();
                 }}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer transition-colors shadow-sm"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer transition-colors shadow-md shrink-0 self-start sm:self-auto"
               >
                 <span>Lanjut Isi Data Reservasi ↓</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4" />
               </a>
             </div>
           ) : (
             <div className="mb-4 text-xs text-slate-400 flex items-center gap-1.5">
               <Info className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Klik pada salah satu kotak hijau (<strong className="text-emerald-400 font-bold">AVAILABLE</strong>) di Tabel Matriks untuk langsung memesan slot.</span>
+              <span>Klik pada kotak hijau (<strong className="text-emerald-400 font-bold">AVAILABLE</strong>) di Tabel Matriks untuk memilih jam. Anda dapat memilih <strong>lebih dari 1 jam</strong> sekaligus.</span>
             </div>
           )}
 
@@ -758,10 +822,10 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                         {tables.map(table => {
                           const status = getSlotStatus(table.id, session);
                           const isSelected = selectedTable?.id === table.id && 
-                            (selectedSession 
-                              ? (selectedSession.session_id === session.session_id || (selectedSession.start_time === session.start_time && selectedSession.end_time === session.end_time))
-                              : selectedTime === session.start_time);
-                          const sessionLabel = `${session.session_name} (${sessionRangeText} WIB)`;
+                            selectedSessions.some(
+                              s => s.session_id === session.session_id || (s.start_time === session.start_time && s.end_time === session.end_time)
+                            );
+                          const sessionLabel = `${session.session_name || sessionRangeText} (${sessionRangeText} WIB)`;
 
                           if (status === 'AVAILABLE') {
                             return (
@@ -774,7 +838,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                                       ? 'bg-amber-400 text-slate-950 font-black shadow-lg ring-2 ring-amber-300'
                                       : 'bg-emerald-500/15 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/40 hover:border-emerald-400 shadow-sm'
                                   }`}
-                                  title={`Pilih ${table.name} ${sessionLabel}`}
+                                  title={isSelected ? `Slot ${table.name} [ ${sessionRangeText} ] Terpilih. Klik untuk batal.` : `Pilih ${table.name} [ ${sessionRangeText} ]`}
                                 >
                                   {isSelected ? (
                                     <>
@@ -944,10 +1008,10 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   <div className="bg-[#0f141f]/90 p-3 rounded-xl border border-slate-800">
                     <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">JAM BERMAIN</span>
                     <span className="text-base font-mono font-black text-amber-400 block">
-                      [ {selectedSession ? `${selectedSession.start_time} – ${selectedSession.end_time}` : formatSlotTime(selectedTime)} ]
+                      [ {jamDisplay} WIB ]
                     </span>
                     <span className="text-[11px] text-slate-400">
-                      {selectedSession ? `${selectedSession.session_name} (${calculateDurationLabel(selectedSession.start_time, selectedSession.end_time)})` : 'Sesi Bermain'}
+                      {totalDurationHours} Jam Bermain ({selectedSlotStrings.length} slot terpilih)
                     </span>
                   </div>
                 </div>
@@ -1035,14 +1099,14 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                       </div>
                     </div>
 
-                    {/* Sesi */}
+                    {/* Durasi */}
                     <div className="space-y-0.5 border-l border-slate-800/80 pl-2.5">
                       <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
                         <Clock className="w-3 h-3 text-amber-400" />
-                        <span>Sesi</span>
+                        <span>Durasi</span>
                       </span>
                       <div className="text-xs sm:text-sm font-bold text-amber-400 truncate">
-                        {selectedSession ? selectedSession.session_name : 'Sesi Khusus'}
+                        {totalDurationHours} Jam Bermain
                       </div>
                     </div>
 
@@ -1052,7 +1116,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                         Jam Mulai
                       </span>
                       <div className="text-xs sm:text-sm font-mono font-bold text-slate-100">
-                        {selectedSession ? selectedSession.start_time : selectedTime} WIB
+                        {earliestStartTime} WIB
                       </div>
                     </div>
 
@@ -1062,7 +1126,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                         Jam Selesai
                       </span>
                       <div className="text-xs sm:text-sm font-mono font-bold text-slate-100">
-                        {selectedSession ? selectedSession.end_time : (formatSlotTime(selectedTime).split(' - ')[1] || 'Selesai')} WIB
+                        {latestEndTime} WIB
                       </div>
                     </div>
                   </div>
@@ -1156,7 +1220,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                   <div className="font-serif font-black text-amber-400 text-lg">EPIC MAHJONG</div>
                   <div className="font-serif font-bold text-slate-100 text-base">{selectedTable.name}</div>
                   <div className="text-xs text-slate-300 mt-0.5">
-                    {formatIndoDate(selectedDate)} • {selectedSession ? `${selectedSession.session_name} (${selectedSession.start_time}–${selectedSession.end_time} WIB)` : `${formatSlotTime(selectedTime)} WIB`}
+                    {formatIndoDate(selectedDate)} • {jamDisplay} WIB ({totalDurationHours} Jam)
                   </div>
                   <div className="text-xs text-emerald-400 font-semibold mt-0.5">
                     {guestCount} Players • Slot Terverifikasi Tersedia
@@ -1173,6 +1237,33 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                     <span className="text-slate-400">WhatsApp:</span>
                     <span className="text-slate-100 font-mono font-medium">{customerPhone}</span>
                   </div>
+
+                  <div className="flex justify-between py-1 border-b border-slate-800/40">
+                    <span className="text-slate-400">Meja:</span>
+                    <span className="text-amber-300 font-bold">{selectedTable.name}</span>
+                  </div>
+
+                  <div className="flex justify-between py-1 border-b border-slate-800/40">
+                    <span className="text-slate-400">Tanggal:</span>
+                    <span className="text-slate-100 font-semibold">{formatIndoDate(selectedDate)}</span>
+                  </div>
+
+                  <div className="flex justify-between py-1 border-b border-slate-800/40">
+                    <span className="text-slate-400">Jam:</span>
+                    <span className="text-amber-400 font-mono font-bold">{jamDisplay} WIB</span>
+                  </div>
+
+                  <div className="flex justify-between py-1 border-b border-slate-800/40">
+                    <span className="text-slate-400">Durasi:</span>
+                    <span className="text-emerald-400 font-bold">{totalDurationHours} Jam</span>
+                  </div>
+
+                  {selectedSlotStrings.length > 0 && (
+                    <div className="flex justify-between py-1 border-b border-slate-800/40">
+                      <span className="text-slate-400">Slot Dipilih:</span>
+                      <span className="text-amber-300 font-mono text-xs">{selectedSlotStrings.join(', ')}</span>
+                    </div>
+                  )}
 
                   <div className="flex justify-between py-1 border-b border-slate-800/40">
                     <span className="text-slate-400">Catatan:</span>

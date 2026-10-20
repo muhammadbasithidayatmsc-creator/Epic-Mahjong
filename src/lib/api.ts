@@ -17,78 +17,22 @@ const LOCAL_SETTINGS_KEY = 'epic_mahjong_client_settings';
 const LOCAL_SESSIONS_KEY = 'epic_mahjong_client_sessions';
 
 export const DEFAULT_SESSIONS: PlaySession[] = [
-  {
-    session_id: 'ses-01',
-    session_name: 'Sesi 1 (Pagi)',
-    start_time: '10:00',
-    end_time: '12:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    session_id: 'ses-02',
-    session_name: 'Sesi 2 (Siang)',
-    start_time: '12:00',
-    end_time: '14:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    session_id: 'ses-03',
-    session_name: 'Sesi 3 (Siang Santai)',
-    start_time: '14:00',
-    end_time: '16:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    session_id: 'ses-04',
-    session_name: 'Sesi 4 (Sore)',
-    start_time: '16:00',
-    end_time: '18:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    session_id: 'ses-05',
-    session_name: 'Sesi 5 (Malam Awal)',
-    start_time: '18:00',
-    end_time: '20:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    session_id: 'ses-06',
-    session_name: 'Sesi 6 (Malam Utama)',
-    start_time: '20:00',
-    end_time: '22:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    session_id: 'ses-07',
-    session_name: 'Sesi 7 (Late Night)',
-    start_time: '22:00',
-    end_time: '00:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    session_id: 'ses-08',
-    session_name: 'Sesi 8 (Midnight)',
-    start_time: '00:00',
-    end_time: '02:00',
-    status: 'ACTIVE',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z'
-  }
+  { session_id: 'ses-01', session_name: '10:00 – 11:00', start_time: '10:00', end_time: '11:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-02', session_name: '11:00 – 12:00', start_time: '11:00', end_time: '12:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-03', session_name: '12:00 – 13:00', start_time: '12:00', end_time: '13:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-04', session_name: '13:00 – 14:00', start_time: '13:00', end_time: '14:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-05', session_name: '14:00 – 15:00', start_time: '14:00', end_time: '15:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-06', session_name: '15:00 – 16:00', start_time: '15:00', end_time: '16:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-07', session_name: '16:00 – 17:00', start_time: '16:00', end_time: '17:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-08', session_name: '17:00 – 18:00', start_time: '17:00', end_time: '18:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-09', session_name: '18:00 – 19:00', start_time: '18:00', end_time: '19:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-10', session_name: '19:00 – 20:00', start_time: '19:00', end_time: '20:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-11', session_name: '20:00 – 21:00', start_time: '20:00', end_time: '21:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-12', session_name: '21:00 – 22:00', start_time: '21:00', end_time: '22:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-13', session_name: '22:00 – 23:00', start_time: '22:00', end_time: '23:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-14', session_name: '23:00 – 00:00', start_time: '23:00', end_time: '00:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-15', session_name: '00:00 – 01:00', start_time: '00:00', end_time: '01:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+  { session_id: 'ses-16', session_name: '01:00 – 02:00', start_time: '01:00', end_time: '02:00', status: 'ACTIVE', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' }
 ];
 
 export const DEFAULT_SETTINGS: BusinessSettings = {
@@ -99,7 +43,10 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   logo: '',
   hero_image: 'https://images.unsplash.com/photo-1511193311914-0346f16efe90?auto=format&fit=crop&w=1600&q=80',
   operating_hours: '10:00 - 02:00 WIB',
-  time_slots: ['10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', '00:00'],
+  time_slots: [
+    '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
+    '18:00', '19:00', '20:00', '21:00', '22:00', '23:00', '00:00', '01:00'
+  ],
   updated_at: new Date().toISOString()
 };
 
@@ -176,15 +123,15 @@ export function formatIndoDate(dateStr: string): string {
 
 export function formatSlotTime(timeStr: string): string {
   if (!timeStr) return '';
-  if (timeStr.includes('-')) return timeStr;
+  if (timeStr.includes('-') || timeStr.includes('–')) return timeStr;
   const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
   if (match) {
     const hour = parseInt(match[1], 10);
     const min = match[2];
-    const endHour = (hour + 2) % 24;
+    const endHour = (hour + 1) % 24;
     const startStr = `${String(hour).padStart(2, '0')}:${min}`;
     const endStr = `${String(endHour).padStart(2, '0')}:${min}`;
-    return `${startStr} - ${endStr}`;
+    return `${startStr} – ${endStr}`;
   }
   return timeStr;
 }
@@ -198,6 +145,8 @@ export function buildWhatsAppLinks(adminPhoneInput: string, res: {
   reservation_time: string;
   start_time?: string;
   end_time?: string;
+  selected_slots?: string[];
+  duration_hours?: number;
   table_name: string;
   guest_count: number;
   notes?: string;
@@ -214,8 +163,18 @@ export function buildWhatsAppLinks(adminPhoneInput: string, res: {
 
   const formattedDate = formatIndoDate(res.reservation_date);
   const jamText = (res.start_time && res.end_time)
-    ? `${res.start_time} – ${res.end_time}`
+    ? `${res.start_time}–${res.end_time}`
     : formatSlotTime(res.reservation_time);
+
+  const durationHours = res.duration_hours || (res.selected_slots && res.selected_slots.length) || 1;
+  const durasiDisplay = `${durationHours} jam`;
+
+  let slotBlock = '';
+  if (res.selected_slots && res.selected_slots.length > 0) {
+    slotBlock = `\nSlot dipilih:\n${res.selected_slots.map(s => `* ${s}`).join('\n')}`;
+  } else if (res.start_time && res.end_time) {
+    slotBlock = `\nSlot dipilih:\n* ${res.start_time}–${res.end_time}`;
+  }
 
   const catatanText = (res.notes && res.notes.trim()) ? res.notes.trim() : '-';
 
@@ -226,8 +185,9 @@ Booking ID: ${res.booking_code}
 Nama: ${res.customer_name}
 No. WhatsApp: ${res.customer_phone}
 Tanggal: ${formattedDate}
-Table: ${res.table_name || 'TABLE'}
-Jam Bermain: ${jamText}
+Meja: ${res.table_name || 'TABLE 01'}
+Jam: ${jamText}
+Durasi: ${durasiDisplay}${slotBlock}
 Jumlah Pemain: ${res.guest_count} Orang
 Catatan: ${catatanText}
 
@@ -519,6 +479,8 @@ export const api = {
     start_time?: string;
     end_time?: string;
     session_name?: string;
+    selected_slots?: string[];
+    duration_hours?: number;
     table_id: string;
     guest_count: number;
     notes?: string;
@@ -866,6 +828,8 @@ export const api = {
     start_time?: string;
     end_time?: string;
     session_name?: string;
+    selected_slots?: string[];
+    duration_hours?: number;
     table_id: string;
     guest_count: number;
     notes?: string;

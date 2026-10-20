@@ -74,15 +74,15 @@ function formatIndoDate(dateStr: string): string {
 
 function formatSlotTime(timeStr: string): string {
   if (!timeStr) return '';
-  if (timeStr.includes('-')) return timeStr;
+  if (timeStr.includes('-') || timeStr.includes('–')) return timeStr;
   const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
   if (match) {
     const hour = parseInt(match[1], 10);
     const min = match[2];
-    const endHour = (hour + 2) % 24;
+    const endHour = (hour + 1) % 24;
     const startStr = `${String(hour).padStart(2, '0')}:${min}`;
     const endStr = `${String(endHour).padStart(2, '0')}:${min}`;
-    return `${startStr} - ${endStr}`;
+    return `${startStr} – ${endStr}`;
   }
   return timeStr;
 }
@@ -99,6 +99,8 @@ function formatWhatsAppUrl(adminPhone: string, reservation: {
   session_name?: string;
   start_time?: string;
   end_time?: string;
+  selected_slots?: string[];
+  duration_hours?: number;
   table_name: string;
   guest_count: number;
   notes?: string;
@@ -112,10 +114,19 @@ function formatWhatsAppUrl(adminPhone: string, reservation: {
   }
 
   const formattedDate = formatIndoDate(reservation.reservation_date);
-  const sessionTitle = reservation.session_name || 'Sesi Bermain';
   const jamDisplay = (reservation.start_time && reservation.end_time)
-    ? `${reservation.start_time} – ${reservation.end_time}`
+    ? `${reservation.start_time}–${reservation.end_time}`
     : formatSlotTime(reservation.reservation_time);
+
+  const durationHours = reservation.duration_hours || (reservation.selected_slots && reservation.selected_slots.length) || 1;
+  const durasiDisplay = `${durationHours} jam`;
+
+  let slotBlock = '';
+  if (reservation.selected_slots && reservation.selected_slots.length > 0) {
+    slotBlock = `\nSlot dipilih:\n${reservation.selected_slots.map(s => `* ${s}`).join('\n')}`;
+  } else if (reservation.start_time && reservation.end_time) {
+    slotBlock = `\nSlot dipilih:\n* ${reservation.start_time}–${reservation.end_time}`;
+  }
 
   const catatanText = (reservation.notes && reservation.notes.trim()) ? reservation.notes.trim() : '-';
 
@@ -126,8 +137,9 @@ Booking ID: ${reservation.booking_code}
 Nama: ${reservation.customer_name}
 No. WhatsApp: ${reservation.customer_phone}
 Tanggal: ${formattedDate}
-Table: ${reservation.table_name}
-Jam Bermain: ${jamDisplay}
+Meja: ${reservation.table_name}
+Jam: ${jamDisplay}
+Durasi: ${durasiDisplay}${slotBlock}
 Jumlah Pemain: ${reservation.guest_count} Orang
 Catatan: ${catatanText}
 
@@ -220,13 +232,15 @@ app.post('/api/public/reservations', (req, res) => {
       start_time,
       end_time,
       session_name,
+      selected_slots,
+      duration_hours,
       table_id,
       guest_count,
       notes
     } = req.body;
 
     // Field validation
-    if (!customer_name || !customer_phone || !reservation_date || (!reservation_time && !session_id && !start_time) || !table_id) {
+    if (!customer_name || !customer_phone || !reservation_date || (!reservation_time && !session_id && !start_time && (!selected_slots || selected_slots.length === 0)) || !table_id) {
       return res.status(400).json({ error: 'Nama, WhatsApp, Tanggal, Jam/Sesi, dan Meja wajib diisi.' });
     }
 
@@ -240,6 +254,8 @@ app.post('/api/public/reservations', (req, res) => {
       start_time,
       end_time,
       session_name,
+      selected_slots,
+      duration_hours: Number(duration_hours) || undefined,
       table_id,
       guest_count: Number(guest_count) || 4,
       notes,
@@ -257,6 +273,8 @@ app.post('/api/public/reservations', (req, res) => {
       session_name: reservation.session_name,
       start_time: reservation.start_time,
       end_time: reservation.end_time,
+      selected_slots: reservation.selected_slots,
+      duration_hours: reservation.duration_hours,
       table_name: reservation.table_name || 'TABLE',
       guest_count: reservation.guest_count,
       notes: reservation.notes
@@ -418,13 +436,15 @@ app.post('/api/admin/reservations', authenticateToken, (req, res) => {
       start_time,
       end_time,
       session_name,
+      selected_slots,
+      duration_hours,
       table_id,
       guest_count,
       notes,
       status
     } = req.body;
 
-    if (!customer_name || !customer_phone || !reservation_date || (!reservation_time && !session_id && !start_time) || !table_id) {
+    if (!customer_name || !customer_phone || !reservation_date || (!reservation_time && !session_id && !start_time && (!selected_slots || selected_slots.length === 0)) || !table_id) {
       return res.status(400).json({ error: 'Nama, WhatsApp, Tanggal, Jam/Sesi, dan Meja wajib diisi.' });
     }
 
@@ -437,6 +457,8 @@ app.post('/api/admin/reservations', authenticateToken, (req, res) => {
       start_time,
       end_time,
       session_name,
+      selected_slots,
+      duration_hours: Number(duration_hours) || undefined,
       table_id,
       guest_count: Number(guest_count) || 4,
       notes,

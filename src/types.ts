@@ -38,6 +38,8 @@ export interface Reservation {
   session_name?: string;
   start_time?: string;
   end_time?: string;
+  selected_slots?: string[]; // e.g. ["14:00–15:00", "15:00–16:00", "16:00–17:00"]
+  duration_hours?: number;
   table_id: string;
   table_name?: string;
   guest_count: number;

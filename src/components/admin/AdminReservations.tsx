@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, 
   Calendar, 
@@ -17,7 +17,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { api } from '../../lib/api';
-import { Reservation, MahjongTable, UserProfile, ReservationStatus } from '../../types';
+import { Reservation, MahjongTable, UserProfile, ReservationStatus, ScheduleSlot, TableAvailabilityStatus } from '../../types';
 
 interface AdminReservationsProps {
   user: UserProfile;
@@ -52,17 +52,21 @@ export const AdminReservations: React.FC<AdminReservationsProps> = ({
   // Status Change Modal State (for COMPLETED / CANCELLED)
   const [statusChangeTarget, setStatusChangeTarget] = useState<{ res: Reservation; newStatus: ReservationStatus } | null>(null);
 
-  // Manual Reservation Modal State
+  // Manual Reservation Modal State (Multi 1-Hour Slot Support)
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualName, setManualName] = useState('');
   const [manualPhone, setManualPhone] = useState('');
   const [manualDate, setManualDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [manualTime, setManualTime] = useState('14:00');
-  const [manualTableId, setManualTableId] = useState(tables[0]?.id || '');
+  const [manualTableId, setManualTableId] = useState(tables[0]?.id || 'tbl-01');
   const [manualGuestCount, setManualGuestCount] = useState(4);
   const [manualNotes, setManualNotes] = useState('');
   const [manualStatus, setManualStatus] = useState<ReservationStatus>('CONFIRMED');
   const [manualSubmitting, setManualSubmitting] = useState(false);
+
+  // Multi-slot selection state & schedule for manual modal
+  const [manualSchedule, setManualSchedule] = useState<ScheduleSlot[]>([]);
+  const [loadingManualSchedule, setLoadingManualSchedule] = useState(false);
+  const [manualSelectedTimes, setManualSelectedTimes] = useState<string[]>([]);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<Reservation | null>(null);
@@ -146,36 +150,114 @@ export const AdminReservations: React.FC<AdminReservationsProps> = ({
     }
   };
 
+  // Load schedule for manual modal whenever date changes or modal opens
+  const loadManualSchedule = async (dateStr: string) => {
+    setLoadingManualSchedule(true);
+    try {
+      const data = await api.getSchedule(dateStr);
+      if (Array.isArray(data)) {
+        setManualSchedule(data);
+      }
+    } catch (_) {
+    } finally {
+      setLoadingManualSchedule(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showManualModal) {
+      loadManualSchedule(manualDate);
+    }
+  }, [showManualModal, manualDate]);
+
+  const sortedManualSelectedSlots = useMemo(() => {
+    return [...manualSelectedTimes].sort((a, b) => {
+      const aH = parseInt(a.split(':')[0], 10);
+      const bH = parseInt(b.split(':')[0], 10);
+      return aH - bH;
+    });
+  }, [manualSelectedTimes]);
+
+  const manualStartTime = sortedManualSelectedSlots[0] || '10:00';
+  const manualEndTime = useMemo(() => {
+    if (sortedManualSelectedSlots.length === 0) return '11:00';
+    const lastStart = sortedManualSelectedSlots[sortedManualSelectedSlots.length - 1];
+    const matched = manualSchedule.find(s => (s.start_time || s.time) === lastStart);
+    if (matched?.end_time) return matched.end_time;
+    const [h, m] = lastStart.split(':').map(Number);
+    return `${String((h + 1) % 24).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`;
+  }, [sortedManualSelectedSlots, manualSchedule]);
+
+  const manualSlotStrings = useMemo(() => {
+    return sortedManualSelectedSlots.map(st => {
+      const matched = manualSchedule.find(s => (s.start_time || s.time) === st);
+      if (matched?.start_time && matched?.end_time) {
+        return `${matched.start_time}–${matched.end_time}`;
+      }
+      const [h, m] = st.split(':').map(Number);
+      const endH = (h + 1) % 24;
+      return `${st}–${String(endH).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`;
+    });
+  }, [sortedManualSelectedSlots, manualSchedule]);
+
+  const getAdminSlotStatus = (time: string): TableAvailabilityStatus => {
+    const slot = manualSchedule.find(s => (s.start_time || s.time) === time);
+    if (!slot) return 'AVAILABLE';
+    const tbl = slot.tables.find(t => t.table_id === (manualTableId || tables[0]?.id));
+    return tbl?.status || 'AVAILABLE';
+  };
+
+  const handleToggleManualSlot = (time: string) => {
+    const status = getAdminSlotStatus(time);
+    if (status !== 'AVAILABLE') return;
+    setManualSelectedTimes(prev => 
+      prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]
+    );
+  };
+
   // Handle Manual Reservation
   const handleCreateManualReservation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualName.trim() || !manualPhone.trim() || !manualDate || !manualTime || !manualTableId) {
+    if (!manualName.trim() || !manualPhone.trim() || !manualDate || !manualTableId) {
       onErrorToast('Harap lengkapi semua field wajib.');
+      return;
+    }
+    if (sortedManualSelectedSlots.length === 0) {
+      onErrorToast('Harap pilih minimal 1 slot jam bermain yang berstatus AVAILABLE.');
       return;
     }
 
     setManualSubmitting(true);
     try {
+      const firstSlot = manualSchedule.find(s => (s.start_time || s.time) === manualStartTime);
       const res = await api.createManualReservation({
         customer_name: manualName.trim(),
         customer_phone: manualPhone.trim(),
         reservation_date: manualDate,
-        reservation_time: manualTime,
+        reservation_time: manualStartTime,
+        start_time: manualStartTime,
+        end_time: manualEndTime,
+        session_id: firstSlot?.session_id,
+        session_name: `${sortedManualSelectedSlots.length} Jam Bermain`,
+        selected_slots: manualSlotStrings,
+        duration_hours: sortedManualSelectedSlots.length,
         table_id: manualTableId,
         guest_count: manualGuestCount,
         notes: manualNotes.trim(),
         status: manualStatus
       });
 
-      onSuccessToast(`Reservasi manual ${res.reservation.booking_code} berhasil dibuat!`);
+      onSuccessToast(`Reservasi manual ${res.reservation.booking_code} (${sortedManualSelectedSlots.length} jam) berhasil dibuat!`);
       setShowManualModal(false);
       // Reset form
       setManualName('');
       setManualPhone('');
       setManualNotes('');
+      setManualSelectedTimes([]);
       loadReservations();
     } catch (err: any) {
       onErrorToast(err.message || 'Gagal membuat reservasi manual.');
+      loadManualSchedule(manualDate);
     } finally {
       setManualSubmitting(false);
     }
@@ -631,69 +713,181 @@ export const AdminReservations: React.FC<AdminReservationsProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300 uppercase">Tanggal Bermain *</label>
+                  <label className="font-semibold text-slate-300 uppercase text-xs">Tanggal Bermain *</label>
                   <input
                     type="date"
                     required
                     value={manualDate}
-                    onChange={(e) => setManualDate(e.target.value)}
-                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
+                    onChange={(e) => {
+                      setManualDate(e.target.value);
+                      setManualSelectedTimes([]);
+                    }}
+                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300 uppercase">Jam Sesi *</label>
+                  <label className="font-semibold text-slate-300 uppercase text-xs">Pilih Meja *</label>
                   <select
-                    value={manualTime}
-                    onChange={(e) => setManualTime(e.target.value)}
-                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-amber-500 cursor-pointer"
+                    value={manualTableId}
+                    onChange={(e) => {
+                      setManualTableId(e.target.value);
+                      setManualSelectedTimes([]);
+                    }}
+                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
                   >
-                    {['10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', '00:00'].map(t => (
-                      <option key={t} value={t}>{t} WIB</option>
+                    {tables.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} (Kapasitas {t.capacity} pax)</option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-300 uppercase">Pilih Meja *</label>
-                  <select
-                    value={manualTableId}
-                    onChange={(e) => setManualTableId(e.target.value)}
-                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-amber-500 cursor-pointer"
-                  >
-                    {tables.map(t => (
-                      <option key={t.id} value={t.id}>{t.name} (Max {t.capacity} pax)</option>
-                    ))}
-                  </select>
+              {/* Multi-Slot 1 Jam Selector */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-300 uppercase text-xs flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>PILIH JAM BERMAIN (SLOT 1 JAM - BISA LEBIH DARI 1 JAM) *</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    {loadingManualSchedule ? 'Memuat ketersediaan slot...' : 'Klik slot AVAILABLE untuk memilih'}
+                  </span>
                 </div>
 
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-2.5 bg-[#0e1420] border border-slate-800 rounded-xl">
+                  {(manualSchedule.length > 0 ? manualSchedule : [
+                    { time: '10:00', start_time: '10:00', end_time: '11:00', tables: [] },
+                    { time: '11:00', start_time: '11:00', end_time: '12:00', tables: [] },
+                    { time: '12:00', start_time: '12:00', end_time: '13:00', tables: [] },
+                    { time: '13:00', start_time: '13:00', end_time: '14:00', tables: [] },
+                    { time: '14:00', start_time: '14:00', end_time: '15:00', tables: [] },
+                    { time: '15:00', start_time: '15:00', end_time: '16:00', tables: [] },
+                    { time: '16:00', start_time: '16:00', end_time: '17:00', tables: [] },
+                    { time: '17:00', start_time: '17:00', end_time: '18:00', tables: [] },
+                    { time: '18:00', start_time: '18:00', end_time: '19:00', tables: [] },
+                    { time: '19:00', start_time: '19:00', end_time: '20:00', tables: [] },
+                    { time: '20:00', start_time: '20:00', end_time: '21:00', tables: [] },
+                    { time: '21:00', start_time: '21:00', end_time: '22:00', tables: [] },
+                    { time: '22:00', start_time: '22:00', end_time: '23:00', tables: [] },
+                    { time: '23:00', start_time: '23:00', end_time: '00:00', tables: [] },
+                    { time: '00:00', start_time: '00:00', end_time: '01:00', tables: [] },
+                    { time: '01:00', start_time: '01:00', end_time: '02:00', tables: [] }
+                  ]).map((slot) => {
+                    const slotTime = slot.start_time || slot.time;
+                    const slotEnd = slot.end_time || `${(parseInt(slotTime.split(':')[0], 10) + 1).toString().padStart(2, '0')}:00`;
+                    const label = `${slotTime}–${slotEnd}`;
+                    const status = getAdminSlotStatus(slotTime);
+                    const isSelected = manualSelectedTimes.includes(slotTime);
+
+                    if (status === 'BOOKED') {
+                      return (
+                        <div
+                          key={slotTime}
+                          className="p-2 rounded-lg bg-rose-950/30 border border-rose-900/50 text-rose-400 text-center text-xs opacity-60 cursor-not-allowed select-none"
+                          title="Slot sudah BOOKED (tidak dapat dipilih)"
+                        >
+                          <div className="font-mono font-bold">{label}</div>
+                          <div className="text-[10px] font-semibold text-rose-500">BOOKED</div>
+                        </div>
+                      );
+                    }
+
+                    if (status === 'PENDING') {
+                      return (
+                        <div
+                          key={slotTime}
+                          className="p-2 rounded-lg bg-amber-950/30 border border-amber-900/50 text-amber-400 text-center text-xs opacity-60 cursor-not-allowed select-none"
+                          title="Slot sedang PENDING (tidak dapat dipilih)"
+                        >
+                          <div className="font-mono font-bold">{label}</div>
+                          <div className="text-[10px] font-semibold text-amber-500">PENDING</div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={slotTime}
+                        type="button"
+                        onClick={() => handleToggleManualSlot(slotTime)}
+                        className={`p-2 rounded-lg border text-center transition-all cursor-pointer text-xs ${
+                          isSelected
+                            ? 'bg-amber-400 text-slate-950 font-extrabold border-amber-300 shadow-md ring-1 ring-amber-300'
+                            : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500 hover:text-slate-950 font-bold'
+                        }`}
+                        title={isSelected ? `Slot ${label} terpilih. Klik untuk batal.` : `Pilih slot ${label}`}
+                      >
+                        <div className="font-mono">{label}</div>
+                        <div className="text-[10px] flex items-center justify-center gap-1 mt-0.5">
+                          {isSelected ? (
+                            <>
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              <span>TERPILIH</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                              <span>AVAILABLE</span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Ringkasan Durasi & Slot Terpilih */}
+                {sortedManualSelectedSlots.length > 0 ? (
+                  <div className="p-3 bg-amber-500/10 border border-amber-400/40 rounded-xl text-xs space-y-1 text-slate-200">
+                    <div className="flex items-center justify-between text-amber-300 font-bold">
+                      <span>Jam: {manualStartTime}–{manualEndTime} WIB</span>
+                      <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-extrabold">
+                        {sortedManualSelectedSlots.length} Jam ({sortedManualSelectedSlots.length} Slot)
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-300 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-slate-400">Slot dipilih:</span>
+                      {manualSlotStrings.map(str => (
+                        <span key={str} className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 font-mono font-medium">
+                          {str}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-amber-400/90 italic">
+                    * Belum ada slot dipilih. Klik minimal 1 slot hijau (AVAILABLE) di atas.
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300 uppercase">Jumlah Orang</label>
+                  <label className="font-semibold text-slate-300 uppercase text-xs">Jumlah Orang</label>
                   <input
                     type="number"
                     min={1}
                     max={6}
                     value={manualGuestCount}
                     onChange={(e) => setManualGuestCount(Number(e.target.value))}
-                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 text-sm focus:outline-none focus:border-amber-500"
                   />
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-300 uppercase">Status Awal</label>
-                <select
-                  value={manualStatus}
-                  onChange={(e) => setManualStatus(e.target.value as ReservationStatus)}
-                  className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-amber-500 cursor-pointer"
-                >
-                  <option value="CONFIRMED">CONFIRMED (Langsung Kunci Meja)</option>
-                  <option value="PENDING">PENDING (Menunggu Pembayaran)</option>
-                </select>
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300 uppercase text-xs">Status Awal</label>
+                  <select
+                    value={manualStatus}
+                    onChange={(e) => setManualStatus(e.target.value as ReservationStatus)}
+                    className="w-full bg-[#161f30] border border-slate-700 rounded-lg p-2.5 text-slate-100 text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+                  >
+                    <option value="CONFIRMED">CONFIRMED (Langsung Kunci Meja)</option>
+                    <option value="PENDING">PENDING (Menunggu Pembayaran)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-1">

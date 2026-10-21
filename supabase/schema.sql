@@ -113,6 +113,12 @@ CREATE POLICY "Service and anon full access on settings" ON settings FOR ALL USI
 CREATE POLICY "Service and anon full access on users" ON users FOR ALL USING (true) WITH CHECK (true);
 
 -- ==========================================================
+-- SUPABASE REALTIME CONFIGURATION
+-- ==========================================================
+-- Mengaktifkan Realtime listener untuk tabel reservations agar HP dan laptop tersinkronisasi instan
+ALTER PUBLICATION supabase_realtime ADD TABLE reservations;
+
+-- ==========================================================
 -- SEED INITIAL DATA
 -- ==========================================================
 

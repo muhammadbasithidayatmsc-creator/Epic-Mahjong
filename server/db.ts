@@ -824,6 +824,11 @@ export const db = {
 
     memoryDb.reservations.unshift(newReservation);
     saveDatabase(memoryDb);
+    if (supabase) {
+      supabase.from('reservations').insert(newReservation).then(({ error }) => {
+        if (error) console.error('[Server DB] Supabase sync insert error:', error.message);
+      });
+    }
     return newReservation;
   },
 
@@ -892,6 +897,14 @@ export const db = {
     reservation.status = newStatus;
     reservation.updated_at = new Date().toISOString();
     saveDatabase(memoryDb);
+    if (supabase) {
+      supabase.from('reservations').update({
+        status: newStatus,
+        updated_at: reservation.updated_at
+      }).or(`id.eq.${id},booking_code.eq.${id}`).then(({ error }) => {
+        if (error) console.error('[Server DB] Supabase sync update error:', error.message);
+      });
+    }
     return { ...reservation };
   },
 
@@ -900,6 +913,11 @@ export const db = {
     memoryDb.reservations = memoryDb.reservations.filter(r => r.id !== id);
     if (memoryDb.reservations.length !== initialLen) {
       saveDatabase(memoryDb);
+      if (supabase) {
+        supabase.from('reservations').delete().or(`id.eq.${id},booking_code.eq.${id}`).then(({ error }) => {
+          if (error) console.error('[Server DB] Supabase sync delete error:', error.message);
+        });
+      }
       return true;
     }
     return false;

@@ -99,6 +99,16 @@ export const AdminReservations: React.FC<AdminReservationsProps> = ({
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Supabase Realtime multi-device synchronization
+  useEffect(() => {
+    const unsubscribe = api.subscribeToReservations(() => {
+      loadReservations();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [dateFilter, statusFilter, search]);
+
   // Handle Confirm Booking (PENDING -> CONFIRMED)
   const handleExecuteConfirm = async () => {
     if (!confirmTarget) return;

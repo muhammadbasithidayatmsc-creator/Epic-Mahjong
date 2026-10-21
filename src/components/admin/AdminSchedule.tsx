@@ -28,6 +28,16 @@ export const AdminSchedule: React.FC<AdminScheduleProps> = ({ onErrorToast }) =>
     loadSchedule();
   }, [date]);
 
+  // Supabase Realtime synchronization across devices
+  useEffect(() => {
+    const unsubscribe = api.subscribeToReservations(() => {
+      loadSchedule();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [date]);
+
   const tableNames = schedule.length > 0 
     ? schedule[0].tables.map(t => t.table_name)
     : ['TABLE 01', 'TABLE 02', 'TABLE 03', 'TABLE 04', 'TABLE 05'];

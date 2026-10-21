@@ -64,6 +64,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     loadStats();
   }, []);
 
+  // Supabase Realtime synchronization across devices
+  useEffect(() => {
+    const unsubscribe = api.subscribeToReservations(() => {
+      loadStats();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   return (
     <div className="space-y-8">
       

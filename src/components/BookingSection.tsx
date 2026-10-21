@@ -351,13 +351,15 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
     fetchScheduleAndAvailability();
   }, [selectedDate]);
 
-  // Background Auto-Polling: Refresh schedule every 18 seconds for live anti double-booking updates
+  // Supabase Realtime + Live synchronization for instant multi-device updates
   useEffect(() => {
-    const timer = setInterval(() => {
+    const unsubscribe = api.subscribeToReservations((payload) => {
       fetchScheduleAndAvailability(true);
-    }, 18000);
-    return () => clearInterval(timer);
-  }, [selectedDate, selectedTime, selectedTable, selectedSessions]);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [selectedDate, selectedTable, selectedSessions]);
 
   // Check status of a specific table at a specific session from daySchedule
   const getSlotStatus = (tableId: string, session: PlaySession): 'AVAILABLE' | 'PENDING' | 'BOOKED' => {

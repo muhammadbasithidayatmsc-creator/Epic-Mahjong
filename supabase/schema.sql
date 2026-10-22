@@ -115,8 +115,20 @@ CREATE POLICY "Service and anon full access on users" ON users FOR ALL USING (tr
 -- ==========================================================
 -- SUPABASE REALTIME CONFIGURATION
 -- ==========================================================
--- Mengaktifkan Realtime listener untuk tabel reservations agar HP dan laptop tersinkronisasi instan
-ALTER PUBLICATION supabase_realtime ADD TABLE reservations;
+-- 1. Mengaktifkan REPLICA IDENTITY FULL agar payload event Realtime (INSERT, UPDATE, DELETE) lengkap
+ALTER TABLE public.reservations REPLICA IDENTITY FULL;
+
+-- 2. Mengaktifkan Realtime listener untuk tabel reservations agar HP dan laptop tersinkronisasi instan
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'reservations'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.reservations;
+  END IF;
+END $$;
+
 
 -- ==========================================================
 -- SEED INITIAL DATA

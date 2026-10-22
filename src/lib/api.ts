@@ -370,7 +370,7 @@ export const api = {
   // REALTIME SYNCHRONIZATION (SUPABASE)
   // ==========================================
   subscribeToReservations(callback: (payload?: any) => void): () => void {
-    const channelName = `realtime-reservations-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const channelName = `realtime-res-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
     // 1. Supabase Realtime channel on 'reservations' table
     const channel = supabase
@@ -379,27 +379,33 @@ export const api = {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reservations' },
         (payload: any) => {
+          console.info('[Supabase Realtime] Event database diterima:', payload.eventType, payload.new?.booking_code || payload.old?.booking_code);
           try {
             callback(payload);
           } catch (e) {
-            console.warn('[Supabase Realtime] Callback error:', e);
+            console.warn('[Supabase Realtime] Callback execution warning:', e);
           }
         }
       )
-      .subscribe((status: string) => {
+      .subscribe((status: string, err?: any) => {
         if (status === 'SUBSCRIBED') {
-          console.log('[Supabase Realtime] Terhubung ke publikasi reservations.');
+          console.info('[Supabase Realtime] Terhubung ke publikasi reservations via WebSocket.');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('[Supabase Realtime] Status channel:', status, 'Detail:', err, '- Memastikan auto-sync interval aktif.');
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[Supabase Realtime] WebSocket timeout. Polling auto-sync siap menangani data.');
         }
       });
 
-    // 2. Intelligent background polling (12s) to ensure synchronization even if Realtime publication is pending in Dashboard
+    // 2. High-frequency background sync (every 5 seconds) to guarantee instant synchronization across devices
+    // even if Supabase Realtime publication is pending in Dashboard or on mobile network drops
     const intervalId = setInterval(() => {
       try {
         callback({ eventType: 'POLL' });
       } catch (_) {}
-    }, 12000);
+    }, 5000);
 
-    // 3. Tab visibility / device wake sync (triggers when customer unlocks phone or opens tab)
+    // 3. Tab visibility / device wake sync (triggers instantly when customer unlocks phone or opens tab or focuses window)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         try {
@@ -783,13 +789,27 @@ export const api = {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const bookingCode = `EM-${dateDigits}-${randomSuffix}`;
 
+    // Resolve safe session_id to guarantee foreign key constraint to 'sessions' table
+    let safeSessionId: string | null = null;
+    try {
+      const sessions = await this.getPublicSessions();
+      if (payload.session_id) {
+        const found = sessions.find(s => s.session_id === payload.session_id);
+        if (found) safeSessionId = found.session_id;
+      }
+      if (!safeSessionId && startTime) {
+        const foundByTime = sessions.find(s => s.start_time === startTime);
+        if (foundByTime) safeSessionId = foundByTime.session_id;
+      }
+    } catch (_) {}
+
     const reservationPayload = {
       booking_code: bookingCode,
       customer_name: payload.customer_name.trim(),
       customer_phone: payload.customer_phone.trim(),
       reservation_date: payload.reservation_date,
       reservation_time: startTime,
-      session_id: payload.session_id || null,
+      session_id: safeSessionId,
       session_name: sessionName,
       start_time: startTime,
       end_time: endTime,
@@ -1089,13 +1109,27 @@ export const api = {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const bookingCode = `EM-${dateDigits}-${randomSuffix}`;
 
+    // Resolve safe session_id
+    let safeSessionId: string | null = null;
+    try {
+      const sessions = await this.getPublicSessions();
+      if (payload.session_id) {
+        const found = sessions.find(s => s.session_id === payload.session_id);
+        if (found) safeSessionId = found.session_id;
+      }
+      if (!safeSessionId && payload.reservation_time) {
+        const foundByTime = sessions.find(s => s.start_time === payload.reservation_time);
+        if (foundByTime) safeSessionId = foundByTime.session_id;
+      }
+    } catch (_) {}
+
     const reservationPayload = {
       booking_code: bookingCode,
       customer_name: payload.customer_name.trim(),
       customer_phone: payload.customer_phone.trim(),
       reservation_date: payload.reservation_date,
       reservation_time: payload.reservation_time,
-      session_id: payload.session_id || null,
+      session_id: safeSessionId,
       session_name: payload.session_name || `${selectedSlots.length} Jam Bermain`,
       start_time: payload.start_time || payload.reservation_time,
       end_time: payload.end_time || null,
